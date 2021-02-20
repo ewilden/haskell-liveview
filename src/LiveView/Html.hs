@@ -12,17 +12,19 @@ import Data.Algorithm.Diff
 import Data.HashMap.Strict hiding ((!?))
 import Data.Hashable
 import Data.List (foldl')
-import Data.Text.Lazy hiding (foldl', length, replicate, zip)
-import Data.Vector hiding (length, replicate, zip)
+import Data.Text qualified as T
+import Data.Text.Lazy hiding (foldl', length, replicate, singleton, zip)
+import Data.Vector hiding (length, replicate, singleton, toList, zip)
 import Data.Vector qualified as V
 import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Import
 import Lucid qualified as L
+import Lucid.Base qualified as L
 
 foo :: L.Html ()
-foo = L.div_ $ L.ul_ $ mconcat $ replicate 3 (L.li_ "item")
+foo = L.div_ $ L.ul_ [L.class_ "foo"] $ mconcat $ replicate 3 (L.li_ "item")
 
 bar :: L.Html ()
 bar = L.ul_ $ L.li_ $ mconcat $ replicate 4 (L.span_ "item")
@@ -85,30 +87,46 @@ makeLenses ''JsonMask
 
 data Handler msg = Handler
   { _jsonMask :: JsonMask,
-    _msgBuilder :: Value -> msg
+    _msgBuilder :: Value -> msg,
+    _event :: T.Text
   }
 
 makeLenses ''Handler
 
 data LiveInternalState msg = LiveInternalState
   { _uid :: Int,
-    _id2handler :: HashMap HandlerId (Value -> msg)
+    _id2handler :: HashMap HandlerId (Handler msg)
   }
 
 makeLenses ''LiveInternalState
 
+newtype Hsaction = Hsaction
+  { _event2id :: HashMap T.Text HandlerId
+  }
+  deriving (Semigroup, Monoid)
+
+makeLenses ''Hsaction
+
+buildHsactionText :: Hsaction -> T.Text
+buildHsactionText hsaction =
+  _event2id hsaction & toList
+    <&> (\(eventName, HandlerId num) -> eventName <> ":" <> toStrict (tshow num))
+    & T.intercalate ";"
+
+hsaction_ :: Hsaction -> L.Attribute
+hsaction_ = L.makeAttribute "hsaction" . buildHsactionText
+
+hsactions_ :: [Hsaction] -> L.Attribute
+hsactions_ = hsaction_ . mconcat
+
 makeHandlerId :: (MonadState (LiveInternalState msg) m) => m HandlerId
 makeHandlerId = HandlerId <$> (uid <<%= (+ 1))
 
--- (LiveInternalState i) <- get
--- put $ LiveInternalState $ i + 1
--- return i
-
-makeHandler :: (MonadState (LiveInternalState msg) m) => (Value -> msg) -> m HandlerId
-makeHandler f = do
+makeHsaction :: (MonadState (LiveInternalState msg) m) => Handler msg -> m Hsaction
+makeHsaction handler = do
   handlerId <- makeHandlerId
-  id2handler . at handlerId L..= Just f
-  return handlerId
+  id2handler . at handlerId L..= Just handler
+  return $ Hsaction $ singleton (_event handler) handlerId
 
 newtype LiveM msg r a = LiveM
   { runLiveM :: ReaderT r (State (LiveInternalState msg)) a
@@ -116,3 +134,6 @@ newtype LiveM msg r a = LiveM
   deriving (Functor, Applicative, Monad, MonadReader r, MonadState (LiveInternalState msg))
 
 type LiveView msg r a = L.HtmlT (LiveM msg r) a
+
+runLiveView :: LiveView msg r () -> ReaderT r (State (LiveInternalState msg)) (L.Html ())
+runLiveView htmlT = L.commuteHtmlT htmlT & runLiveM

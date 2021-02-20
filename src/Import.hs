@@ -10,15 +10,13 @@ module Import
   )
 where
 
+import Control.Lens ((&))
 import Control.Monad
 import Data.Composition
 import Data.Maybe
-import Data.String (IsString(..))
+import Data.String (IsString (..))
 import Data.Text.Lazy
 import Data.Tuple.Extra
-
-(&) :: a -> (a -> c) -> c
-(&) = flip ($)
 
 tshow :: (Show a) => a -> Text
 tshow = pack . show
@@ -36,7 +34,7 @@ tshow = pack . show
 --   fronUnstring = unpack
 
 -- instance (IsString a, IsUnstring a) => Interp a where
---   interp = 
+--   interp =
 
 -- -- instance (Interp a, IsString b) => Interp (b -> a) where
 -- --   interp = interp .: (<>)
