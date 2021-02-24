@@ -15,7 +15,7 @@ import Control.Monad
 import Data.Composition
 import Data.Maybe
 import Data.String (IsString (..))
-import Data.Text.Lazy
+import Data.Text
 import Data.Tuple.Extra
 
 tshow :: (Show a) => a -> Text

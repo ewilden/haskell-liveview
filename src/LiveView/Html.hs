@@ -13,7 +13,8 @@ import Data.HashMap.Strict hiding ((!?))
 import Data.Hashable
 import Data.List (foldl')
 import Data.Text qualified as T
-import Data.Text.Lazy hiding (foldl', length, replicate, singleton, zip)
+import Data.Text.Lazy qualified as TL
+import Data.Text hiding (foldl', length, replicate, singleton, zip)
 import Data.Vector hiding (length, replicate, singleton, toList, zip)
 import Data.Vector qualified as V
 import Hedgehog
@@ -41,7 +42,7 @@ splitBetweenTags txt =
    in if n == 1 then chunks else finalizeChunk <$> idxChunks
 
 toSplitText :: L.Html () -> [Text]
-toSplitText = splitBetweenTags . L.renderText
+toSplitText = splitBetweenTags . TL.toStrict . L.renderText
 
 diffHtml :: L.Html () -> L.Html () -> [PatchEntry Text]
 diffHtml l r = toPatch $ getDiff (toSplitText l) (toSplitText r)
@@ -100,6 +101,9 @@ data LiveInternalState msg = LiveInternalState
 
 makeLenses ''LiveInternalState
 
+initLiveInternalState :: LiveInternalState msg
+initLiveInternalState = LiveInternalState 0 mempty
+
 newtype Hsaction = Hsaction
   { _event2id :: HashMap T.Text HandlerId
   }
@@ -107,10 +111,15 @@ newtype Hsaction = Hsaction
 
 makeLenses ''Hsaction
 
+data HandlerCall = HandlerCall
+  { _handlerId :: HandlerId,
+    _maskedJson :: Value
+  }
+
 buildHsactionText :: Hsaction -> T.Text
 buildHsactionText hsaction =
   _event2id hsaction & toList
-    <&> (\(eventName, HandlerId num) -> eventName <> ":" <> toStrict (tshow num))
+    <&> (\(eventName, HandlerId num) -> eventName <> ":" <> (tshow num))
     & T.intercalate ";"
 
 hsaction_ :: Hsaction -> L.Attribute
@@ -137,3 +146,14 @@ type LiveView msg r a = L.HtmlT (LiveM msg r) a
 
 runLiveView :: LiveView msg r () -> ReaderT r (State (LiveInternalState msg)) (L.Html ())
 runLiveView htmlT = L.commuteHtmlT htmlT & runLiveM
+
+data LiveViewResult msg = LiveViewResult
+  { _liveInternalState :: LiveInternalState msg,
+    _html :: L.Html ()
+  }
+
+toLiveViewResult :: r -> ReaderT r (State (LiveInternalState msg)) (L.Html ()) -> LiveViewResult msg
+toLiveViewResult r m = runReaderT m r & flip runState initLiveInternalState & uncurry (flip LiveViewResult)
+
+getLiveViewResult :: r -> LiveView msg r () -> LiveViewResult msg
+getLiveViewResult r = toLiveViewResult r . runLiveView
