@@ -17,7 +17,9 @@ import Streaming
 import qualified Streaming.Prelude as S
 
 
-newtype Clock = Clock Int deriving (Eq, Hashable, Enum, Ord, Show)
+newtype Clock = Clock {
+  _unClock :: Int 
+} deriving (Eq, Hashable, Enum, Ord, Show)
 
 data InputStreamEntry r 
   = InputState r
@@ -29,7 +31,7 @@ isState (InputState _) = True
 isState _ = False
 
 numTrueBefore :: Monad m => Stream (Of Bool) m r -> Stream (Of Int) m r
-numTrueBefore = S.drop 1 . S.scan (\x a -> x + fromEnum a) 0 id
+numTrueBefore = S.scan (\x a -> x + if a then 1 else 0) 0 id
 
 mostRecentJustBefore :: Monad m => a -> Stream (Of (Maybe a)) m r -> Stream (Of a) m r
 mostRecentJustBefore a = S.scan fromMaybe a id
