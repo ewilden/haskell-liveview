@@ -78,7 +78,7 @@ instance (FromJSON a) => FromJSON (PatchEntry a) where
   parseJSON (Number 1) = pure Keep
   parseJSON _ = mzero
 
-newtype HandlerId = HandlerId Int deriving (Eq, Hashable)
+newtype HandlerId = HandlerId Int deriving (Eq, Hashable, Show)
 
 -- instance Hashable HandlerId
 
@@ -114,7 +114,7 @@ makeLenses ''Hsaction
 data HandlerCall = HandlerCall
   { _handlerId :: HandlerId,
     _maskedJson :: Value
-  }
+  } deriving Show
 
 buildHsactionText :: Hsaction -> T.Text
 buildHsactionText hsaction =

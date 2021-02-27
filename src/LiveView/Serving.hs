@@ -16,14 +16,13 @@ import Lucid qualified as L
 import Streaming
 import qualified Streaming.Prelude as S
 
--- runlv :: LiveView msg r () -> ReaderT r (State (LiveInternalState msg)) (L.Html ())
--- runlv = undefined
 
-newtype Clock = Clock Int deriving (Eq, Hashable, Enum, Ord)
+newtype Clock = Clock Int deriving (Eq, Hashable, Enum, Ord, Show)
 
 data InputStreamEntry r 
   = InputState r
   | InputJson (HandlerCall, Clock)
+  deriving Show
 
 isState :: InputStreamEntry r -> Bool
 isState (InputState _) = True
@@ -33,16 +32,10 @@ numTrueBefore :: Monad m => Stream (Of Bool) m r -> Stream (Of Int) m r
 numTrueBefore = S.drop 1 . S.scan (\x a -> x + fromEnum a) 0 id
 
 mostRecentJustBefore :: Monad m => a -> Stream (Of (Maybe a)) m r -> Stream (Of a) m r
-mostRecentJustBefore a = S.scan (\x mayA -> case mayA of
-    Nothing -> x
-    Just x' -> x') a id
-
--- data SumStreamEntry r = RenderState r | Json (HandlerCall, Clock)
+mostRecentJustBefore a = S.scan fromMaybe a id
 
 data LiveViewInputs msg r m = LiveViewInputs
   { _initialState :: r,
-    -- _stateStream :: Stream (Of r) m (),
-    -- _jsonStream :: Stream (Of (HandlerCall, Clock)) m (),
     _inputStream :: Stream (Of (InputStreamEntry r)) m ()
   }
 
@@ -60,8 +53,6 @@ data OutputStreamEntry msg
 
 data LiveViewOutputs msg m = LiveViewOutputs
   { _outputStream :: Stream (Of (OutputStreamEntry msg)) m (),
-    -- _msgs :: Stream (Of msg) m (),
-    -- _patches :: Stream (Of ([PatchEntry T.Text], Clock)) m (),
     _mountList :: ([T.Text], Clock),
     _firstRender :: T.Text
   }
@@ -89,16 +80,16 @@ serveLiveView liveview inputs =
         InputJson (call, callClk) ->
             if callClk < clk then (Nothing, Nothing)
             else if callClk > clk then error "Oughtta be impossible: callClk > clk ???"
-            else ((do
+            else (do
               handler <- HM.lookup (_handlerId call) (_id2handler $ _liveInternalState prevlvr)
-              pure $ OutputMsg $ _msgBuilder handler $ _maskedJson call), Nothing)
+              pure $ OutputMsg $ _msgBuilder handler $ _maskedJson call, Nothing)
           ) (_inputStream inputs) stateClockS prevlvrS
       prevlvrS = mostRecentJustBefore (getLiveViewResult (_initialState inputs) liveview)
                     $ S.map snd outputWithLvrS
       initialHtml = _html $ getLiveViewResult (_initialState inputs) liveview
-      liveViewResults = S.map (flip getLiveViewResult liveview) (S.cons (_initialState inputs) $ _stateStream inputs)
+      liveViewResults = S.map (`getLiveViewResult` liveview) (S.cons (_initialState inputs) $ _stateStream inputs)
       htmls = S.map _html liveViewResults
-      diffs = S.zipWith (diffHtml) htmls (S.drop 1 htmls)
+      diffs = S.zipWith diffHtml htmls (S.drop 1 htmls)
    in LiveViewOutputs
         { _outputStream = S.mapMaybe fst outputWithLvrS, 
           _mountList = (toSplitText initialHtml, Clock 0),

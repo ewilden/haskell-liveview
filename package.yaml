@@ -39,50 +39,51 @@ dependencies:
 - unordered-containers >= 0.2.13.0 && < 1
 - vector >= 0.12.1.2 && < 1
 
+default-extensions: 
+# GHC 2021
+- EmptyCase
+- PostfixOperators
+- TupleSections
+- ImportQualifiedPost
+- NamedFieldPuns
+- BangPatterns
+- BinaryLiterals
+- HexFloatLiterals
+- NumericUnderscores
+- GADTSyntax
+- RankNTypes
+- TypeApplications
+- PolyKinds
+- StandaloneKindSignatures
+- ExistentialQuantification
+- TypeOperators
+- ConstraintKinds
+- ExplicitForAll
+- KindSignatures
+- NamedWildCards
+- ScopedTypeVariables
+- FlexibleContexts
+- FlexibleInstances
+- MultiParamTypeClasses
+- ConstrainedClassMethods
+- InstanceSigs
+- TypeSynonymInstances
+- DeriveDataTypeable
+- DeriveFoldable
+- DeriveFunctor
+- DeriveTraversable
+- StandaloneDeriving
+- EmptyDataDeriving
+- DeriveLift
+- GeneralisedNewtypeDeriving
+- DeriveGeneric
+# Others
+- LambdaCase
+- NamedFieldPuns
+- TupleSections
+
 library:
   source-dirs: src
-  default-extensions: 
-  # GHC 2021
-  - EmptyCase
-  - PostfixOperators
-  - TupleSections
-  - ImportQualifiedPost
-  - NamedFieldPuns
-  - BangPatterns
-  - BinaryLiterals
-  - HexFloatLiterals
-  - NumericUnderscores
-  - GADTSyntax
-  - RankNTypes
-  - TypeApplications
-  - PolyKinds
-  - StandaloneKindSignatures
-  - ExistentialQuantification
-  - TypeOperators
-  - ConstraintKinds
-  - ExplicitForAll
-  - KindSignatures
-  - NamedWildCards
-  - ScopedTypeVariables
-  - FlexibleContexts
-  - FlexibleInstances
-  - MultiParamTypeClasses
-  - ConstrainedClassMethods
-  - InstanceSigs
-  - TypeSynonymInstances
-  - DeriveDataTypeable
-  - DeriveFoldable
-  - DeriveFunctor
-  - DeriveTraversable
-  - StandaloneDeriving
-  - EmptyDataDeriving
-  - DeriveLift
-  - GeneralisedNewtypeDeriving
-  - DeriveGeneric
-  # Others
-  - LambdaCase
-  - NamedFieldPuns
-  - TupleSections
 
 executables:
   liveview-simple-exe:
