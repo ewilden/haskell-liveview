@@ -21,9 +21,15 @@ newtype Clock = Clock {
   _unClock :: Int 
 } deriving (Eq, Hashable, Enum, Ord, Show)
 
+
+data ActionCall = ActionCall
+  { _action :: T.Text,
+    _payload :: HashMap T.Text T.Text
+  } deriving Show
+
 data InputStreamEntry r 
   = InputState r
-  | InputJson (HandlerCall, Clock)
+  | InputAction (ActionCall, Clock)
   deriving Show
 
 isState :: InputStreamEntry r -> Bool
@@ -36,25 +42,25 @@ numTrueBefore = S.scan (\x a -> x + if a then 1 else 0) 0 id
 mostRecentJustBefore :: Monad m => a -> Stream (Of (Maybe a)) m r -> Stream (Of a) m r
 mostRecentJustBefore a = S.scan fromMaybe a id
 
-data LiveViewInputs msg r m = LiveViewInputs
+data LiveViewInputs r m = LiveViewInputs
   { _initialState :: r,
     _inputStream :: Stream (Of (InputStreamEntry r)) m ()
   }
 
-_stateStream :: (Monad m) => LiveViewInputs msg r m -> Stream (Of r) m ()
+_stateStream :: (Monad m) => LiveViewInputs r m -> Stream (Of r) m ()
 _stateStream inputs = _inputStream inputs 
   & S.mapMaybe (\case InputState r -> Just r; _ -> Nothing)
 
-_jsonStream :: (Monad m) => LiveViewInputs msg r m -> Stream (Of (HandlerCall, Clock)) m ()
-_jsonStream inputs = _inputStream inputs 
-  & S.mapMaybe (\case InputJson x -> Just x; _ -> Nothing)
+_actionStream :: (Monad m) => LiveViewInputs r m -> Stream (Of (ActionCall, Clock)) m ()
+_actionStream inputs = _inputStream inputs 
+  & S.mapMaybe (\case InputAction x -> Just x; _ -> Nothing)
 
-data OutputStreamEntry msg
-  = OutputMsg msg
+data OutputStreamEntry
+  = OutputAction ActionCall
   | OutputPatch ([PatchEntry T.Text], Clock)
 
-data LiveViewOutputs msg m = LiveViewOutputs
-  { _outputStream :: Stream (Of (OutputStreamEntry msg)) m (),
+data LiveViewOutputs m = LiveViewOutputs
+  { _outputStream :: Stream (Of OutputStreamEntry) m (),
     _mountList :: ([T.Text], Clock),
     _firstRender :: T.Text
   }
@@ -69,22 +75,20 @@ data LiveViewOutputs msg m = LiveViewOutputs
   Then the clock can be internal to serveLiveView
 -}
 
-serveLiveView :: forall msg r m. (Monad m) => LiveView msg r () -> LiveViewInputs msg r m -> LiveViewOutputs msg m
+serveLiveView :: forall r m. (Monad m) => LiveView r () -> LiveViewInputs r m -> LiveViewOutputs m
 serveLiveView liveview inputs =
   let isStateS = S.map isState $ _inputStream inputs
       stateClockS = S.map (Clock . (+1)) $ numTrueBefore isStateS
-      outputWithLvrS :: Stream (Of (Maybe (OutputStreamEntry msg), Maybe (LiveViewResult msg))) m ()
+      outputWithLvrS :: Stream (Of (Maybe (OutputStreamEntry), Maybe (LiveViewResult))) m ()
       outputWithLvrS = S.zipWith3 (\inp clk prevlvr -> case inp of
         InputState r -> 
             let nowlvr = getLiveViewResult r liveview
                 diff = diffHtml (_html prevlvr) (_html nowlvr)
             in  (Just $ OutputPatch (diff, clk), Just nowlvr)
-        InputJson (call, callClk) ->
+        InputAction (call, callClk) ->
             if callClk < clk then (Nothing, Nothing)
             else if callClk > clk then error "Oughtta be impossible: callClk > clk ???"
-            else (do
-              handler <- HM.lookup (_handlerId call) (_id2handler $ _liveInternalState prevlvr)
-              pure $ OutputMsg $ _msgBuilder handler $ _maskedJson call, Nothing)
+            else (Just $ OutputAction call, Nothing)
           ) (_inputStream inputs) stateClockS prevlvrS
       prevlvrS = mostRecentJustBefore (getLiveViewResult (_initialState inputs) liveview)
                     $ S.map snd outputWithLvrS

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module LiveView.Html where
@@ -8,6 +9,7 @@ import Control.Lens qualified as L
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Aeson
+import Data.Aeson.QQ
 import Data.Algorithm.Diff
 import Data.HashMap.Strict hiding ((!?))
 import Data.Hashable
@@ -78,48 +80,17 @@ instance (FromJSON a) => FromJSON (PatchEntry a) where
   parseJSON (Number 1) = pure Keep
   parseJSON _ = mzero
 
-newtype HandlerId = HandlerId Int deriving (Eq, Hashable, Show)
-
--- instance Hashable HandlerId
-
-newtype JsonMask = JsonMask {_unJsonMask :: Value}
-
-makeLenses ''JsonMask
-
-data Handler msg = Handler
-  { _jsonMask :: JsonMask,
-    _msgBuilder :: Value -> msg,
-    _event :: T.Text
-  }
-
-makeLenses ''Handler
-
-data LiveInternalState msg = LiveInternalState
-  { _uid :: Int,
-    _id2handler :: HashMap HandlerId (Handler msg)
-  }
-
-makeLenses ''LiveInternalState
-
-initLiveInternalState :: LiveInternalState msg
-initLiveInternalState = LiveInternalState 0 mempty
-
 newtype Hsaction = Hsaction
-  { _event2id :: HashMap T.Text HandlerId
+  { _event2action :: HashMap T.Text T.Text
   }
   deriving (Semigroup, Monoid)
 
 makeLenses ''Hsaction
 
-data HandlerCall = HandlerCall
-  { _handlerId :: HandlerId,
-    _maskedJson :: Value
-  } deriving Show
-
 buildHsactionText :: Hsaction -> T.Text
 buildHsactionText hsaction =
-  _event2id hsaction & toList
-    <&> (\(eventName, HandlerId num) -> eventName <> ":" <> (tshow num))
+  _event2action hsaction & toList
+    <&> (\(eventName, actionName) -> eventName <> ":" <> actionName)
     & T.intercalate ";"
 
 hsaction_ :: Hsaction -> L.Attribute
@@ -128,32 +99,45 @@ hsaction_ = L.makeAttribute "hsaction" . buildHsactionText
 hsactions_ :: [Hsaction] -> L.Attribute
 hsactions_ = hsaction_ . mconcat
 
-makeHandlerId :: (MonadState (LiveInternalState msg) m) => m HandlerId
-makeHandlerId = HandlerId <$> (uid <<%= (+ 1))
+makeHsaction :: (Monad m) => T.Text -> T.Text -> m Hsaction
+makeHsaction event action = do
+  return $ Hsaction $ singleton event action
 
-makeHsaction :: (MonadState (LiveInternalState msg) m) => Handler msg -> m Hsaction
-makeHsaction handler = do
-  handlerId <- makeHandlerId
-  id2handler . at handlerId L..= Just handler
-  return $ Hsaction $ singleton (_event handler) handlerId
-
-newtype LiveM msg r a = LiveM
-  { runLiveM :: ReaderT r (State (LiveInternalState msg)) a
+newtype LiveM r a = LiveM
+  { runLiveM :: Reader r a
   }
-  deriving (Functor, Applicative, Monad, MonadReader r, MonadState (LiveInternalState msg))
+  deriving (Functor, Applicative, Monad, MonadReader r)
 
-type LiveView msg r a = L.HtmlT (LiveM msg r) a
+type LiveView r a = L.HtmlT (LiveM r) a
 
-runLiveView :: LiveView msg r () -> ReaderT r (State (LiveInternalState msg)) (L.Html ())
+runLiveView :: LiveView r () -> Reader r (L.Html ())
 runLiveView htmlT = L.commuteHtmlT htmlT & runLiveM
 
-data LiveViewResult msg = LiveViewResult
-  { _liveInternalState :: LiveInternalState msg,
-    _html :: L.Html ()
+data LiveViewResult = LiveViewResult
+  { _html :: L.Html ()
   }
 
-toLiveViewResult :: r -> ReaderT r (State (LiveInternalState msg)) (L.Html ()) -> LiveViewResult msg
-toLiveViewResult r m = runReaderT m r & flip runState initLiveInternalState & uncurry (flip LiveViewResult)
+toLiveViewResult :: r -> Reader r (L.Html ()) -> LiveViewResult
+toLiveViewResult r m = runReader m r & LiveViewResult
 
-getLiveViewResult :: r -> LiveView msg r () -> LiveViewResult msg
+getLiveViewResult :: r -> LiveView r () -> LiveViewResult
 getLiveViewResult r = toLiveViewResult r . runLiveView
+
+{-
+
+BINDING	ATTRIBUTES
+Params	phx-value-*
+Click Events	phx-capture-click, phx-click
+Focus/Blur Events	phx-window-focus, phx-window-blur, phx-focus, phx-blur
+Key Events	phx-key, phx-window-keyup, phx-window-keydown, phx-keyup, phx-keydown
+Form Events	phx-auto-recover, phx-trigger-action, phx-disable-with, phx-feedback-for, phx-submit, phx-change
+Rate Limiting	phx-throttle, phx-debounce
+DOM Patching	phx-update
+JS Interop	phx-hook
+
+-}
+
+hsValue :: Text -> Text -> L.Attribute
+hsValue = L.makeAttribute
+
+-- makeEventHandler :: 

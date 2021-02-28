@@ -32,7 +32,7 @@ prop_serve_onePatchPerState = property $ do
   let mkInt = Gen.int (Range.linear 0 100)
   inputs <- forAll $ genStateOnlyLiveViewInputs mkInt
   initR <- forAll mkInt
-  let outputs :: LiveViewOutputs () Identity
+  let outputs :: LiveViewOutputs Identity
       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each inputs)
   length (filter (\case (OutputPatch _) -> True; _ -> False) $ 
     runIdentity $ S.toList_ (_outputStream outputs)) === length inputs
@@ -42,7 +42,7 @@ prop_serve_clockCountFrom0 = property $ do
   let mkInt = Gen.int (Range.linear 0 100)
   inputs <- forAll $ genStateOnlyLiveViewInputs mkInt
   initR <- forAll mkInt
-  let outputs :: LiveViewOutputs () Identity
+  let outputs :: LiveViewOutputs Identity
       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each inputs)
       clockInts = _unClock (snd $ _mountList outputs) : (mapMaybe (\case (OutputPatch a) -> Just $ _unClock $ snd a; _ -> Nothing) $ 
                       runIdentity $ S.toList_ (_outputStream outputs))
@@ -56,11 +56,11 @@ prop_serveAndApply_noPathDependence = property $ do
   initR <- forAll mkInt
   initR' <- forAll mkInt
   endR <- forAll mkInt
-  let outputs :: LiveViewOutputs () Identity
+  let outputs :: LiveViewOutputs Identity
       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each (inputs ++ [InputState endR]))
-      outputs' :: LiveViewOutputs () Identity
+      outputs' :: LiveViewOutputs Identity
       outputs' = serveLiveView testIntLiveView (LiveViewInputs initR' $ S.each (inputs' ++ [InputState endR]))
-      toFinalList :: LiveViewOutputs () Identity -> PropertyT IO [T.Text]
+      toFinalList :: LiveViewOutputs Identity -> PropertyT IO [T.Text]
       toFinalList outs = toClientsidePatchlist outs & S.last_ & runExcept & evalEither >>= evalMaybe & (fmap fst)
   out <- toFinalList outputs
   out' <- toFinalList outputs'
@@ -68,3 +68,5 @@ prop_serveAndApply_noPathDependence = property $ do
 
 tests :: IO Bool
 tests = checkParallel $$(discover)
+
+main = tests
