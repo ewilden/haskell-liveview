@@ -1,6 +1,6 @@
-type JsonMask = "deep" | "shallow" | object | null | undefined;
+type JsonMask = "deep" | "shallow" | Record<string, object> | null | undefined;
 
-export function applyMask(object: unknown, jsonMask: JsonMask) {
+export function applyMask(object: any, jsonMask: JsonMask) {
   if (!object) {
     return object;
   }
@@ -13,10 +13,10 @@ export function applyMask(object: unknown, jsonMask: JsonMask) {
   if (jsonMask === "deep") {
     return object;
   }
-  const out = {};
+  const out: any = {};
   if (jsonMask === "shallow") {
-    for (const key of Object.keys(object)) {
-      let prop = object[key];
+    for (const key of Object.keys(object as object)) {
+      let prop: any = (object as any)[key];
       if (typeof prop === "object" || typeof prop === "function") {
         prop = null;
       }
@@ -26,7 +26,7 @@ export function applyMask(object: unknown, jsonMask: JsonMask) {
   }
   // typeof jsonMask === "object"
   for (const key of Object.keys(jsonMask)) {
-    out[key] = applyMask(object[key], jsonMask[key]);
+    out[key] = applyMask(object[key], jsonMask[key] as JsonMask);
   }
   return out;
 }

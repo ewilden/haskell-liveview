@@ -25,6 +25,7 @@ import Hedgehog.Range qualified as Range
 import Import
 import Lucid qualified as L
 import Lucid.Base qualified as L
+import NeatInterpolation
 
 foo :: L.Html ()
 foo = L.div_ $ L.ul_ [L.class_ "foo"] $ mconcat $ replicate 3 (L.li_ "item")
@@ -138,6 +139,6 @@ JS Interop	phx-hook
 -}
 
 hsValue :: Text -> Text -> L.Attribute
-hsValue = L.makeAttribute
+hsValue attrName value = L.makeAttribute [trimming|hsvalue-$attrName|] value
 
 -- makeEventHandler :: 
