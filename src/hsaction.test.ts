@@ -9,7 +9,7 @@ test('is a function', async () => {
   document.body.innerHTML = 
   `<div id="root">
     <ul id="list1">
-      <li id="clicktarget" hsaction="click:hello_click">Hello</li>
+      <li id="clicktarget" hsaction="click:hello_click" hsdebounce="${DEBOUNCE_DURATION}">Hello</li>
       <li hsaction="focus:test_focus;blur:hello_blur" hsvalue-foo="foo">Test</li>
     </ul>
   </div>`
@@ -23,6 +23,6 @@ test('is a function', async () => {
   // document.getElementById('clicktarget')!.addEventListener('click', (e) => {events.push({action: 'foo', payload: {foo: 'foo'}});});
   // expect(document.getElementById('clicktarget')!.onclick).toBeTruthy();
   document.getElementById('clicktarget')!.click();
-  await tick(DEBOUNCE_DURATION);
+  await tick(DEBOUNCE_DURATION + 50);
   expect(events.length).toBe(1);
 });
