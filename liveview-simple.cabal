@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 6db889fdf8863494842045d32bcbc58e595353ee35b5770328721f01d58a0be3
+-- hash: d4ec8bac758a01628a8fc56df9f1135a851b3be04f9972b73d3a2db57c029c6b
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -50,6 +50,7 @@ library
     , lens-aeson
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
+    , neat-interpolation
     , streaming
     , text >=1.2.3.1 && <2
     , unordered-containers >=0.2.13.0 && <1
@@ -78,6 +79,7 @@ executable liveview-simple-exe
     , liveview-simple
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
+    , neat-interpolation
     , streaming
     , text >=1.2.3.1 && <2
     , unordered-containers >=0.2.13.0 && <1
@@ -107,6 +109,7 @@ test-suite liveview-simple-test
     , liveview-simple
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
+    , neat-interpolation
     , streaming
     , text >=1.2.3.1 && <2
     , unordered-containers >=0.2.13.0 && <1

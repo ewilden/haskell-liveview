@@ -1,5 +1,5 @@
 "use strict";
-exports.__esModule = true;
+Object.defineProperty(exports, "__esModule", { value: true });
 exports.applyMask = void 0;
 function applyMask(object, jsonMask) {
     if (!object) {
@@ -14,11 +14,10 @@ function applyMask(object, jsonMask) {
     if (jsonMask === "deep") {
         return object;
     }
-    var out = {};
+    const out = {};
     if (jsonMask === "shallow") {
-        for (var _i = 0, _a = Object.keys(object); _i < _a.length; _i++) {
-            var key = _a[_i];
-            var prop = object[key];
+        for (const key of Object.keys(object)) {
+            let prop = object[key];
             if (typeof prop === "object" || typeof prop === "function") {
                 prop = null;
             }
@@ -27,8 +26,7 @@ function applyMask(object, jsonMask) {
         return out;
     }
     // typeof jsonMask === "object"
-    for (var _b = 0, _c = Object.keys(jsonMask); _b < _c.length; _b++) {
-        var key = _c[_b];
+    for (const key of Object.keys(jsonMask)) {
         out[key] = applyMask(object[key], jsonMask[key]);
     }
     return out;

@@ -132,7 +132,7 @@ const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCall
         listener = throttleFn(listener, throttle);
       }
       node.addEventListener(event, listener);
-      cleanupCallbacks.push(() => void node.removeEventListener(event, listener));
+      cleanupCallbacks.push(() => node.removeEventListener(event, listener));
     }
   }
   return cleanupCallbacks;

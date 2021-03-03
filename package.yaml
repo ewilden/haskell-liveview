@@ -34,6 +34,7 @@ dependencies:
 - lens-aeson
 - lucid >= 2.9.11 && < 3
 - mtl >= 2.2.2 && < 3
+- neat-interpolation
 - streaming
 - text >= 1.2.3.1 && < 2
 - unordered-containers >= 0.2.13.0 && < 1
