@@ -10,7 +10,7 @@ export function instrumentHsaction(root: Element, callback: CallConsumer): Clean
   let cleanupCallbacks: CleanupCallback[] = Array.from(root.querySelectorAll('[hsaction]'))
     .flatMap(instrumentNode(callback));
   return () => {
-    cleanupCallbacks.forEach(cleanup => void cleanup());
+    cleanupCallbacks.forEach(cleanup => cleanup());
     cleanupCallbacks = [];
   };
 }
@@ -100,12 +100,12 @@ function listenDebounced(node: Element,
 const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCallback[] = 
     (callback: CallConsumer) => (node: Element) => {
   const eventActionPairs = node.getAttribute('hsaction')!.split(';').map(s => s.split(':') as [string, string]);
+  // console.log(eventActionPairs);
   const debounce: DebounceSpec|undefined = node.hasAttribute("hsdebounce") ? 
     parseDebounce(node.getAttribute("hsdebounce")!) : undefined;
   const throttle: number|undefined = node.hasAttribute('hsthrottle') ? +node.getAttribute('hsthrottle')! : undefined;
 
   const cleanupCallbacks: CleanupCallback[] = [];
-
   for (const [event, action] of eventActionPairs) {
     let listener = (e: Event) => {
       const payload = {} as Record<string, string>;
@@ -131,6 +131,7 @@ const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCall
       if (throttle) {
         listener = throttleFn(listener, throttle);
       }
+      // console.log(`adding listener ${listener} to ${node} for ${event}`)
       node.addEventListener(event, listener);
       cleanupCallbacks.push(() => node.removeEventListener(event, listener));
     }

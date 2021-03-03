@@ -5,7 +5,7 @@ function instrumentHsaction(root, callback) {
     let cleanupCallbacks = Array.from(root.querySelectorAll('[hsaction]'))
         .flatMap(instrumentNode(callback));
     return () => {
-        cleanupCallbacks.forEach(cleanup => void cleanup());
+        cleanupCallbacks.forEach(cleanup => cleanup());
         cleanupCallbacks = [];
     };
 }
@@ -74,6 +74,7 @@ function listenDebounced(node, event, debounce, callback) {
 }
 const instrumentNode = (callback) => (node) => {
     const eventActionPairs = node.getAttribute('hsaction').split(';').map(s => s.split(':'));
+    // console.log(eventActionPairs);
     const debounce = node.hasAttribute("hsdebounce") ?
         parseDebounce(node.getAttribute("hsdebounce")) : undefined;
     const throttle = node.hasAttribute('hsthrottle') ? +node.getAttribute('hsthrottle') : undefined;
@@ -105,6 +106,7 @@ const instrumentNode = (callback) => (node) => {
             if (throttle) {
                 listener = throttleFn(listener, throttle);
             }
+            // console.log(`adding listener ${listener} to ${node} for ${event}`)
             node.addEventListener(event, listener);
             cleanupCallbacks.push(() => node.removeEventListener(event, listener));
         }
