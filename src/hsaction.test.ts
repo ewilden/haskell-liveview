@@ -4,7 +4,7 @@ function tick(ms: number = 1): Promise<void> {
   return new Promise(ok => setTimeout(ok, ms));
 }
 
-test('is a function', async () => {
+test('instrumentHsaction', async () => {
   const DEBOUNCE_DURATION = 50;
   document.body.innerHTML = 
   `<div id="root">
