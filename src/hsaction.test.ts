@@ -8,10 +8,19 @@ test('is a function', async () => {
   const DEBOUNCE_DURATION = 50;
   document.body.innerHTML = 
   `<div id="root">
-    <button id="basic_click" hsaction="click:basic_click" hsvalue-foo="bar"></button>
+    <button id="basic_click"
+            hsaction="click:basic_click"
+            hsvalue-foo="bar">
+    </button>
     <ul id="list1">
-      <button id="debounce_click" hsaction="click:debounce_click"  hsdebounce="${DEBOUNCE_DURATION}"></button>
-      <button id="debounce_blur_focus" hsaction="focus:debounce_blur_focus;keyup:other_event"  hsdebounce="blur"></button>
+      <button id="debounce_click" 
+              hsaction="click:debounce_click"
+              hsdebounce="${DEBOUNCE_DURATION}">
+      </button>
+      <button id="debounce_blur_focus" 
+              hsaction="focus:debounce_blur_focus;keyup:other_event" 
+              hsdebounce="blur">
+      </button>
     </ul>
   </div>`
   const events: [ActionCall, number][] = [];
@@ -24,7 +33,7 @@ test('is a function', async () => {
   const basicClickTime = Date.now();
   expect(events.length).toBe(1);
   expect(events[0][0]).toEqual({action: 'basic_click', payload: {foo: 'bar'}});
-  expect(events[0][1]).toBeCloseTo(basicClickTime);
+  expect(events[0][1] - basicClickTime).toBeLessThan(16);
 
   document.getElementById('debounce_click')!.click();
   const debounceClickTime = Date.now();

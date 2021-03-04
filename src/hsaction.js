@@ -73,7 +73,7 @@ function listenDebounced(node, event, debounce, callback) {
     return [() => node.removeEventListener(event, listener), () => cleanupPendings.forEach(f => f())];
 }
 const instrumentNode = (callback) => (node) => {
-    const eventActionPairs = node.getAttribute('hsaction').split(';').map(s => s.split(':'));
+    const eventActionPairs = node.getAttribute('hsaction').split(';').map(s => s.split(':').map(st => st.trim()));
     // console.log(eventActionPairs);
     const debounce = node.hasAttribute("hsdebounce") ?
         parseDebounce(node.getAttribute("hsdebounce")) : undefined;

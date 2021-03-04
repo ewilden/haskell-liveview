@@ -99,7 +99,7 @@ function listenDebounced(node: Element,
 
 const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCallback[] = 
     (callback: CallConsumer) => (node: Element) => {
-  const eventActionPairs = node.getAttribute('hsaction')!.split(';').map(s => s.split(':') as [string, string]);
+  const eventActionPairs = node.getAttribute('hsaction')!.split(';').map(s => s.split(':').map(st => st.trim()) as [string, string]);
   // console.log(eventActionPairs);
   const debounce: DebounceSpec|undefined = node.hasAttribute("hsdebounce") ? 
     parseDebounce(node.getAttribute("hsdebounce")!) : undefined;
