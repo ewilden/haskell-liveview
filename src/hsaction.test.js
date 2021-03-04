@@ -34,6 +34,9 @@ test('is a function', async () => {
     expect(events[0][0]).toEqual({ action: 'basic_click', payload: { foo: 'bar' } });
     expect(events[0][1] - basicClickTime).toBeLessThan(16);
     document.getElementById('debounce_click').click();
+    document.getElementById('debounce_click').click();
+    document.getElementById('debounce_click').click();
+    document.getElementById('debounce_click').click();
     const debounceClickTime = Date.now();
     expect(events.length).toBe(1);
     await tick();
@@ -42,6 +45,10 @@ test('is a function', async () => {
     expect(events.length).toBe(2);
     expect(events[1][0]).toEqual({ action: 'debounce_click', payload: {} });
     expect(events[1][1] - (debounceClickTime + DEBOUNCE_DURATION)).toBeLessThan(16);
+    document.getElementById('debounce_blur_focus').focus();
+    document.getElementById('debounce_blur_focus').focus();
+    document.getElementById('debounce_blur_focus').focus();
+    document.getElementById('debounce_blur_focus').focus();
     document.getElementById('debounce_blur_focus').focus();
     expect(events.length).toBe(2);
     await tick(50);

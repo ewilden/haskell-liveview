@@ -65,8 +65,13 @@ function listenDebounced(node, event, debounce, callback) {
             cleanupPendings.forEach(f => f());
             cleanupPendings = [];
             cleanupPendings.push(() => waitPromise.cancel());
-            await waitPromise.promise;
-            callback(e);
+            try {
+                await waitPromise.promise;
+                callback(e);
+            }
+            catch (err) {
+                // pass
+            }
         })();
     };
     node.addEventListener(event, listener);
