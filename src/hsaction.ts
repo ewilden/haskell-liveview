@@ -109,7 +109,10 @@ const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCall
   for (const [event, action] of eventActionPairs) {
     let listener = (e: Event) => {
       const payload = {} as Record<string, string>;
-      payload.value = String((node as HTMLInputElement).value);
+      const mayValue = (node as HTMLInputElement).value;
+      if (mayValue) {
+        payload.value = String(mayValue);
+      }
       let key: string|null = null;
       for (const attrName of node.getAttributeNames()) {
         if (attrName.startsWith("hsvalue-")) {

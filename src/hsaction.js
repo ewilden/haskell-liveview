@@ -82,7 +82,10 @@ const instrumentNode = (callback) => (node) => {
     for (const [event, action] of eventActionPairs) {
         let listener = (e) => {
             const payload = {};
-            payload.value = String(node.value);
+            const mayValue = node.value;
+            if (mayValue) {
+                payload.value = String(mayValue);
+            }
             let key = null;
             for (const attrName of node.getAttributeNames()) {
                 if (attrName.startsWith("hsvalue-")) {

@@ -5,24 +5,48 @@ function tick(ms = 1) {
     return new Promise(ok => setTimeout(ok, ms));
 }
 test('is a function', async () => {
-    const DEBOUNCE_DURATION = 10;
+    const DEBOUNCE_DURATION = 50;
     document.body.innerHTML =
         `<div id="root">
+    <button id="basic_click" hsaction="click:basic_click" hsvalue-foo="bar"></button>
     <ul id="list1">
-      <li id="clicktarget" hsaction="click:hello_click" hsdebounce="${DEBOUNCE_DURATION}">Hello</li>
-      <li hsaction="focus:test_focus;blur:hello_blur" hsvalue-foo="foo">Test</li>
+      <button id="debounce_click" hsaction="click:debounce_click"  hsdebounce="${DEBOUNCE_DURATION}"></button>
+      <button id="debounce_blur_focus" hsaction="focus:debounce_blur_focus;keyup:other_event"  hsdebounce="blur"></button>
     </ul>
   </div>`;
     const events = [];
-    expect(Array.from(document.body.querySelectorAll('[hsaction]')).length).toBe(2);
     const cleanup = hsaction_1.instrumentHsaction(document.body, e => {
-        // console.log('consumer');
-        events.push(e);
+        events.push([e, Date.now()]);
     });
-    expect(typeof cleanup).toBe('function');
-    // document.getElementById('clicktarget')!.addEventListener('click', (e) => {events.push({action: 'foo', payload: {foo: 'foo'}});});
-    // expect(document.getElementById('clicktarget')!.onclick).toBeTruthy();
-    document.getElementById('clicktarget').click();
-    await tick(DEBOUNCE_DURATION + 50);
+    expect(events.length).toBe(0);
+    document.getElementById('basic_click').click();
+    const basicClickTime = Date.now();
     expect(events.length).toBe(1);
+    expect(events[0][0]).toEqual({ action: 'basic_click', payload: { foo: 'bar' } });
+    expect(events[0][1]).toBeCloseTo(basicClickTime);
+    document.getElementById('debounce_click').click();
+    const debounceClickTime = Date.now();
+    expect(events.length).toBe(1);
+    await tick();
+    expect(events.length).toBe(1);
+    await tick(DEBOUNCE_DURATION + 50);
+    expect(events.length).toBe(2);
+    expect(events[1][0]).toEqual({ action: 'debounce_click', payload: {} });
+    expect(events[1][1] - (debounceClickTime + DEBOUNCE_DURATION)).toBeLessThan(16);
+    document.getElementById('debounce_blur_focus').focus();
+    expect(events.length).toBe(2);
+    await tick(50);
+    expect(events.length).toBe(2);
+    document.getElementById('debounce_blur_focus').blur();
+    const debounceBlurTime = Date.now();
+    await tick(50);
+    expect(events.length).toBe(3);
+    expect(events[2][0]).toEqual({ action: 'debounce_blur_focus', payload: {} });
+    expect(events[2][1] - debounceBlurTime).toBeLessThan(16);
+    const eventsLengthBeforeCleanup = events.length;
+    cleanup();
+    document.getElementById('basic_click').click();
+    document.getElementById('debounce_click').click();
+    await tick(DEBOUNCE_DURATION + 50);
+    expect(events.length).toBe(eventsLengthBeforeCleanup);
 });
