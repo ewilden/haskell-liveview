@@ -4,7 +4,7 @@ const hsaction_1 = require("./hsaction");
 function tick(ms = 1) {
     return new Promise(ok => setTimeout(ok, ms));
 }
-test('is a function', async () => {
+test('instrumentHsaction', async () => {
     const DEBOUNCE_DURATION = 50;
     document.body.innerHTML =
         `<div id="root">

@@ -2,7 +2,10 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module LiveView.Html where
+module LiveView.Html (
+  module LiveView.Html,
+  module Lucid
+  ) where
 
 import Control.Lens hiding ((.=))
 import Control.Lens qualified as L
@@ -23,6 +26,7 @@ import Hedgehog
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
 import Import
+import Lucid qualified
 import Lucid qualified as L
 import Lucid.Base qualified as L
 import NeatInterpolation
