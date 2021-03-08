@@ -50,15 +50,14 @@ function wait(timeMs: number): CancelablePromise<void> {
 }
 
 function throttleFn<T>(f: (t: T) => void, timeMs: number): (t: T) => void {
-  let timer: Promise<void>|null;
+  let lastCall = Date.now();
   return (t: T) => {
-    (async () => {
-     if (timer) {
-       await timer;
-     }
-     f(t);
-     timer = wait(timeMs).promise;
-    })();
+    const now = Date.now();
+    if (now - lastCall < timeMs) {
+      return;
+    }
+    lastCall = now;
+    f(t);
   };
 }
 
