@@ -27,6 +27,10 @@
     "typescript": "^4.2.2"
   },
   "dependencies": {
+    "@most/core": "^1.6.1",
+    "@most/scheduler": "^1.3.0",
+    "@most/types": "^1.1.0",
+    "@repeaterjs/repeater": "^3.0.4",
     "core-js": "^3.9.1",
     "esbuild": "^0.8.57",
     "hkts": "^0.3.1",

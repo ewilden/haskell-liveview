@@ -61,7 +61,7 @@ function throttleFn<T>(f: (t: T) => void, timeMs: number): (t: T) => void {
   };
 }
 
-class ResolvablePromise<T> {
+export class ResolvablePromise<T> implements CancelablePromise<T> {
   readonly promise: Promise<T>;
   resolve!: (t: T) => void;
   reject!: (e: any) => void;
