@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module LiveView.Serving where
 
 import Control.Lens hiding ((.=))
@@ -5,6 +7,7 @@ import Control.Lens qualified as L
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Aeson
+import Data.Aeson.TH
 import Data.Hashable
 import Data.HashMap.Strict hiding ((!?))
 import qualified Data.HashMap.Strict as HM
@@ -19,13 +22,15 @@ import qualified Streaming.Prelude as S
 
 newtype Clock = Clock {
   _unClock :: Int 
-} deriving (Eq, Hashable, Enum, Ord, Show)
+} deriving (Eq, Hashable, Enum, FromJSON, Ord, Show, ToJSON)
 
 
 data ActionCall = ActionCall
   { _action :: T.Text,
     _payload :: HashMap T.Text T.Text
   } deriving Show
+
+deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
 
 data InputStreamEntry r 
   = InputState r
@@ -62,7 +67,7 @@ data OutputStreamEntry
 data LiveViewOutputs m = LiveViewOutputs
   { _outputStream :: Stream (Of OutputStreamEntry) m (),
     _mountList :: ([T.Text], Clock),
-    _firstRender :: T.Text
+    _firstRender :: L.Html ()
   }
 
 {-
@@ -99,5 +104,5 @@ serveLiveView liveview inputs =
    in LiveViewOutputs
         { _outputStream = S.mapMaybe fst outputWithLvrS, 
           _mountList = (toSplitText initialHtml, Clock 0),
-          _firstRender = TL.toStrict $ L.renderText initialHtml
+          _firstRender = initialHtml
         }

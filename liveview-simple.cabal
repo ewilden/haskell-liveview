@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d4ec8bac758a01628a8fc56df9f1135a851b3be04f9972b73d3a2db57c029c6b
+-- hash: 48d59d525379a99c56d3ec24a518b3f9471d046c50b12aec07a1189a8e0672d8
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       LiveView.Fixtures
       LiveView.Html
       LiveView.Serving
+      LiveView.Serving.Servant
   other-modules:
       Paths_liveview_simple
   hs-source-dirs:
@@ -41,6 +42,7 @@ library
       Diff >=0.3.4 && <1
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , async
     , base >=4.7 && <5
     , composition >=1.0.2.1 && <2
     , extra >=1.6.17 && <2
@@ -51,10 +53,17 @@ library
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
     , streaming
     , text >=1.2.3.1 && <2
+    , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , websockets
   default-language: Haskell2010
 
 executable liveview-simple-exe
@@ -69,6 +78,7 @@ executable liveview-simple-exe
       Diff >=0.3.4 && <1
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , async
     , base >=4.7 && <5
     , composition >=1.0.2.1 && <2
     , extra >=1.6.17 && <2
@@ -80,10 +90,17 @@ executable liveview-simple-exe
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
     , streaming
     , text >=1.2.3.1 && <2
+    , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , websockets
   default-language: Haskell2010
 
 test-suite liveview-simple-test
@@ -99,6 +116,7 @@ test-suite liveview-simple-test
       Diff >=0.3.4 && <1
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , async
     , base >=4.7 && <5
     , composition >=1.0.2.1 && <2
     , extra >=1.6.17 && <2
@@ -110,8 +128,15 @@ test-suite liveview-simple-test
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
     , streaming
     , text >=1.2.3.1 && <2
+    , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , websockets
   default-language: Haskell2010

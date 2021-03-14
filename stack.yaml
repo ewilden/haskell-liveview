@@ -42,6 +42,9 @@ packages:
 # # For brittany: 
 # extra-deps:
 # - data-tree-print-0.1.0.2@sha256:a451b35254521324f691f4a63012cac7f279e2761ce3e6d22d189476d8b6cde4,1620
+extra-deps:
+- servant-lucid-0.9.0.1@sha256:17b634fd41c8e14158bbcab5bed6aa7291832396495b3e271a8379dbdbf07e85,1789
+- servant-websockets-2.0.0@sha256:6e9e3600bced90fd52ed3d1bf632205cb21479075b20d6637153cc4567000234,2253
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
