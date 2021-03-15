@@ -41,7 +41,10 @@ function mkHandle(url: string): WebSocketHandle {
       return new Promise(resolve => {
         webSocket.addEventListener("close", event => resolve({type: "close", event}));
         webSocket.addEventListener("error", event => resolve({type: "error", event}));
-        webSocket.addEventListener("message", event => push({type: "message", event}));
+        webSocket.addEventListener("message", event => {
+          push({type: "message", event});
+          console.log(event);
+        });
       });
     });
   const send = webSocket.send.bind(webSocket);
@@ -62,7 +65,10 @@ type LiveViewMessage = [LiveViewMountMessage | LiveViewPatchMessage, number];
 
 function parseWSMessage(wsMessage: WSMessage): LiveViewMessage {
   // TODO: validate
-  return JSON.parse(wsMessage.event.data);
+  console.log('parsing');
+  const parsed = JSON.parse(wsMessage.event.data);
+  console.log(parsed);
+  return parsed;
 }
 
 function applyPatch(currArray: string[], patches: PatchEntry[]): string[] {
@@ -87,7 +93,9 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
   const ws = mkHandle(wsUrl);
   let currClock = 0;
   let currArray: string[]|undefined;
-  const cleanup = instrumentHsaction(root, call => {
+  let cleanup = instrumentHsaction(root, call => {
+    console.log('sending');
+    console.log(call);
     ws.send(JSON.stringify([call, currClock]));
   });
   try {
@@ -112,7 +120,20 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
             }
             currArray = applyPatch(currArray, msg[1]);
           }
-          morphdom(root, currArray.join(''));
+          const toMorph = `${currArray.join('')}`;
+          console.log(root);
+          console.log('morphing');
+          console.log(toMorph);
+          console.log(root.innerHTML);
+          cleanup();
+          // morphdom(root, toMorph);
+          // console.log(root.innerHTML);
+          // root.innerHTML = toMorph;
+          cleanup = instrumentHsaction(root, call => {
+            console.log('sending');
+            console.log(call);
+            ws.send(JSON.stringify([call, currClock]));
+          });
         }
       }
     })();

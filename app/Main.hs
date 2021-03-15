@@ -30,25 +30,23 @@ api = Proxy
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
 sampleLiveView :: LiveView (Float, Op, Float) ()
-sampleLiveView = doctypehtml_ $ do
-  head_ $ title_ "LiveView test"
-  body_ $ do
-    (x, op, y) <- ask
-    onChangeX <- makeHsaction "change" "change_x"
-    input_ [value_ $ tshow x, hsaction_ onChangeX]
-    onChangeOp <- makeHsaction "change" "change_op"
-    select_ [hsaction_ onChangeOp] $ forM_ [Add, Subtract, Multiply, Divide] $ \op' ->
-      option_ ([value_ $ tshow op'] ++ if op == op' then [selected_ "true"] else []) 
-        $ fromString $ show op'
-    onChangeY <- makeHsaction "change" "change_y"
-    input_ [value_ $ tshow y, hsaction_ onChangeY]
-    " = "
-    let opFn = case op of
-          Add -> (+)
-          Subtract -> (-)
-          Multiply -> (*)
-          Divide -> (/)
-    input_ [value_ $ tshow (opFn x y)]
+sampleLiveView = div_ [id_ "lvroot"] $ do
+  (x, op, y) <- ask
+  onChangeX <- makeHsaction "change" "change_x"
+  input_ [value_ $ tshow x, hsaction_ onChangeX]
+  onChangeOp <- makeHsaction "change" "change_op"
+  select_ [hsaction_ onChangeOp] $ forM_ [Add, Subtract, Multiply, Divide] $ \op' ->
+    option_ ([value_ $ tshow op'] ++ if op == op' then [selected_ "true"] else []) 
+      $ fromString $ show op'
+  onChangeY <- makeHsaction "change" "change_y"
+  input_ [value_ $ tshow y, hsaction_ onChangeY]
+  " = "
+  let opFn = case op of
+        Add -> (+)
+        Subtract -> (-)
+        Multiply -> (*)
+        Divide -> (/)
+  input_ [value_ $ tshow (opFn x y)]
   script_ [src_ "index.js"] $ T.pack ""
 
 reducer :: ActionCall -> State (Float, Op, Float) ()
@@ -61,7 +59,7 @@ reducer (ActionCall action payload) =
     _2 .= (read $ T.unpack $ payload ^?! ix "value")
   else pure ()
 
-server :: Server API
+server :: ServerT API IO
 server = serveLiveViewServant sampleLiveView deps :<|> serveDirectoryWebApp "static"
   where deps = ServantDeps 
                 { _subscribeToState = do
@@ -69,13 +67,16 @@ server = serveLiveViewServant sampleLiveView deps :<|> serveDirectoryWebApp "sta
                     stateChan <- liftIO STM.newTChanIO
                     currStateTV <- liftIO (STM.newTVarIO initS)
                     let stateStream = S.repeatM (atomically $ STM.readTChan stateChan)
-                        actionCallback action = liftIO $ atomically $ do
-                          currState <- STM.readTVar currStateTV
-                          let nextState = execState (reducer action) currState
-                          STM.writeTChan stateChan nextState
-                          STM.writeTVar currStateTV nextState
+                        actionCallback action = do
+                          liftIO $ Prelude.putStrLn "actionCallback"
+                          liftIO $ atomically $ do
+                            currState <- STM.readTVar currStateTV
+                            let nextState = execState (reducer action) currState
+                            STM.writeTChan stateChan nextState
+                            STM.writeTVar currStateTV nextState
+                          liftIO $ Prelude.putStrLn "actionCallback 2"
                     pure (initS, stateStream, actionCallback)
                 }
 
 main :: IO ()
-main = Warp.run 5000 (serve api server)
+main = Warp.run 5000 (serve api (hoistServer api liftIO server))

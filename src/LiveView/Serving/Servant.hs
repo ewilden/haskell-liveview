@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
 module LiveView.Serving.Servant where
@@ -28,12 +30,17 @@ data ServantDeps r m = ServantDeps
   -- , _actionCallback :: ActionCall -> m ()
   }
 
-serveLiveViewServant :: forall r m. (MonadIO m) => LiveView r () -> ServantDeps r m -> ServerT LiveViewApi m
+-- TODO: serve static HTML as the page container!
+
+serveLiveViewServant :: forall r m. (MonadIO m, m ~ IO) => LiveView r () -> ServantDeps r m -> ServerT LiveViewApi m
 serveLiveViewServant liveView servDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
     initialRenderEndpoint = do
       initialState <- (^. _1) <$> _subscribeToState servDeps
-      pure $ _html $ getLiveViewResult initialState liveView
+      let initialLiveHtml = _html $ getLiveViewResult initialState liveView
+      pure $ doctypehtml_ $ do
+        head_ $ title_ "LiveView test!!"
+        body_ $ initialLiveHtml
     liveRenderEndpoint conn = do
       (initS, states, actionCallback) <- _subscribeToState servDeps
       inpChan <- liftIO STM.newTChanIO
@@ -41,17 +48,25 @@ serveLiveViewServant liveView servDeps = initialRenderEndpoint :<|> liveRenderEn
             receivedMsg <- WS.receiveData conn
             Prelude.putStrLn $ show receivedMsg
             case (decodeStrict receivedMsg :: Maybe (ActionCall, Clock)) of
-              Nothing -> pure ()
-              Just actionCall -> STM.atomically $ STM.writeTChan inpChan (InputAction actionCall)
-          stateThread = S.mapM_ (STM.atomically . STM.writeTChan inpChan . InputState) states
-      liftIO $ Async.withAsync actionThread $ \_ -> pure ()
-      liftIO $ Async.withAsync stateThread $ \_ -> pure ()
-      let inputStream :: Stream (Of (InputStreamEntry r)) m ()
-          inputStream = S.repeatM (liftIO $ STM.atomically $ STM.readTChan inpChan)
-          inputs = LiveViewInputs initS inputStream
-          outputs = serveLiveView liveView inputs
-          mountMsg = ((T.pack "mount", fst $ _mountList outputs), snd $ _mountList outputs)
-      liftIO $ WS.sendTextData conn $ encode mountMsg
-      flip S.mapM_ (_outputStream outputs) $ \case
-          OutputAction call -> actionCallback call
-          OutputPatch (patchList, clock) -> liftIO $ WS.sendTextData conn $ encode ((T.pack "patch", patchList), clock)
+              Nothing -> Prelude.putStrLn "failed to decode"
+              Just actionCall -> do
+                Prelude.putStrLn "parsed successfully"
+                Prelude.putStrLn $ show actionCall
+                STM.atomically $ STM.writeTChan inpChan (InputAction actionCall)
+                Prelude.putStrLn "wrote to chan"
+          stateThread = S.mapM_ (\s -> do
+            STM.atomically $ STM.writeTChan inpChan $ InputState s
+            Prelude.putStrLn "wrote state") states
+      liftIO $ Async.withAsync actionThread $ \_ -> do
+        liftIO $ Async.withAsync stateThread $ \_ -> do
+          let inputStream :: Stream (Of (InputStreamEntry r)) m ()
+              inputStream = S.repeatM (liftIO $ STM.atomically $ STM.readTChan inpChan)
+              inputs = LiveViewInputs initS inputStream
+              outputs = serveLiveView liveView inputs
+              mountMsg = ((T.pack "mount", fst $ _mountList outputs), snd $ _mountList outputs)
+          liftIO $ WS.sendTextData conn $ encode mountMsg
+          flip S.mapM_ (_outputStream outputs) $ \case
+              OutputAction call -> do
+                putStrLn "calling OutputAction"
+                actionCallback call
+              OutputPatch (patchList, clock) -> liftIO $ WS.sendTextData conn $ encode ((T.pack "patch", patchList), clock)
