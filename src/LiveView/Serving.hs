@@ -44,6 +44,7 @@ data LiveViewDeps r m = LiveViewDeps
   , _liveview :: LiveView r ()
   , _sendSocketMessage :: BL.ByteString -> m ()
   , _sendActionCall :: ActionCall -> m ()
+  , _debPrint :: String -> m ()
   }
 
 serveLV :: (Monad m) => LiveViewDeps r m -> m ()
@@ -51,18 +52,18 @@ serveLV deps = do
   let getHtml r = _html $ getLiveViewResult r (_liveview deps)
       initHtml = getHtml (_initstate deps)
       mountList = toSplitText initHtml
-      isState = \case DepState _ -> True; _ -> False
-      isStateS = S.map isState $ _depStream deps
-      clockS = S.map (Clock . (+1)) $ numTrueBefore isStateS
+  _debPrint deps "start"
   _sendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
   flip evalStateT (initHtml, Clock 0) 
     $ flip S.mapM_ (hoist lift $ _depStream deps) $ \case 
         DepState r -> do
+          lift $ _debPrint deps "DepState"
           let nowHtml = getHtml r
           prevHtml <- _1 <<.= nowHtml
           clock <- _2 <%= succ
           lift $ _sendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
         DepMessage rawMessage -> do
+          lift $ _debPrint deps "DepMessage"
           case (decode rawMessage :: Maybe (ActionCall, Clock)) of
             Nothing -> pure ()
             Just (call, clock) -> lift $ _sendActionCall deps call

@@ -57,7 +57,7 @@ function mkHandle(url: string): WebSocketHandle {
   };
 }
 
-type PatchEntry = ["keep"] | ["delete"] | ["insert", string];
+type PatchEntry = 1 /* keep */ | 0 /* delete */ | [string] /* insert */;
 type LiveViewMountMessage = ["mount", string[]];
 type LiveViewPatchMessage = ["patch", PatchEntry[]];
 
@@ -75,12 +75,12 @@ function applyPatch(currArray: string[], patches: PatchEntry[]): string[] {
   const out = [];
   let currIndex = 0;
   for (const patchEntry of patches) {
-      if (patchEntry[0] === "delete") {
+      if (patchEntry === 0) {
         currIndex++;
-      } else if (patchEntry[0] === "keep") {
+      } else if (patchEntry === 1) {
         out.push(currArray[currIndex++]);
       } else {
-        out.push(patchEntry[1]);
+        out.push(patchEntry[0]);
       }
   }
   if (currIndex !== currArray.length) {
@@ -121,12 +121,12 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
             currArray = applyPatch(currArray, msg[1]);
           }
           const toMorph = `${currArray.join('')}`;
-          console.log(root);
+          // console.log(root);
           console.log('morphing');
           console.log(toMorph);
-          console.log(root.innerHTML);
+          // console.log(root.innerHTML);
           cleanup();
-          // morphdom(root, toMorph);
+          morphdom(root, toMorph);
           // console.log(root.innerHTML);
           // root.innerHTML = toMorph;
           cleanup = instrumentHsaction(root, call => {
