@@ -46,6 +46,7 @@ dependencies:
 - unliftio
 - unordered-containers >= 0.2.13.0 && < 1
 - vector >= 0.12.1.2 && < 1
+- warp
 - websockets
 
 default-extensions: 

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 48d59d525379a99c56d3ec24a518b3f9471d046c50b12aec07a1189a8e0672d8
+-- hash: 9a77ac4346f95cb8a1d2cfc73c59d6813bdda3f6a225908b431e7d9c394003e0
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -63,6 +63,7 @@ library
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , warp
     , websockets
   default-language: Haskell2010
 
@@ -100,6 +101,7 @@ executable liveview-simple-exe
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , warp
     , websockets
   default-language: Haskell2010
 
@@ -138,5 +140,6 @@ test-suite liveview-simple-test
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , warp
     , websockets
   default-language: Haskell2010
