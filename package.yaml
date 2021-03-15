@@ -21,11 +21,12 @@ description:         Please see the README on GitHub at <https://github.com/ewil
 
 dependencies:
 - base >= 4.7 && < 5
-# - aeson-diff >= 1.1.0.7 && < 2
 - Diff >= 0.3.4 && < 1
 - aeson >= 1.5.5.1 && < 2
+# - aeson-diff >= 1.1.0.7 && < 2
 - aeson-qq >= 0.8.3 && < 1
 - async
+- bytestring
 - composition >= 1.0.2.1 && < 2
 - extra >= 1.6.17 && < 2
 # - generic-lens

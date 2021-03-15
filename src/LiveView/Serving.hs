@@ -1,18 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module LiveView.Serving where
 
-import Control.Lens hiding ((.=))
+import Control.Lens
 import Control.Lens qualified as L
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.Aeson
+import Data.Aeson hiding ((.=))
 import Data.Aeson.TH
+-- import Data.ByteString qualified as B
+import Data.ByteString.Lazy qualified as BL
 import Data.Hashable
 import Data.HashMap.Strict hiding ((!?))
 import qualified Data.HashMap.Strict as HM
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
+import Debug.Trace
 import Import
 import LiveView.Html
 import Lucid qualified as L
@@ -31,6 +35,38 @@ data ActionCall = ActionCall
   } deriving Show
 
 deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
+
+data DepInput r = DepState r | DepMessage BL.ByteString
+
+data LiveViewDeps r m = LiveViewDeps
+  { _initstate :: r
+  , _depStream :: Stream (Of (DepInput r)) m ()
+  , _liveview :: LiveView r ()
+  , _sendSocketMessage :: BL.ByteString -> m ()
+  , _sendActionCall :: ActionCall -> m ()
+  }
+
+serveLV :: (Monad m) => LiveViewDeps r m -> m ()
+serveLV deps = do
+  let getHtml r = _html $ getLiveViewResult r (_liveview deps)
+      initHtml = getHtml (_initstate deps)
+      mountList = toSplitText initHtml
+      isState = \case DepState _ -> True; _ -> False
+      isStateS = S.map isState $ _depStream deps
+      clockS = S.map (Clock . (+1)) $ numTrueBefore isStateS
+  _sendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
+  flip evalStateT (initHtml, Clock 0) 
+    $ flip S.mapM_ (hoist lift $ _depStream deps) $ \case 
+        DepState r -> do
+          let nowHtml = getHtml r
+          prevHtml <- _1 <<.= nowHtml
+          clock <- _2 <%= succ
+          lift $ _sendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
+        DepMessage rawMessage -> do
+          case (decode rawMessage :: Maybe (ActionCall, Clock)) of
+            Nothing -> pure ()
+            Just (call, clock) -> lift $ _sendActionCall deps call
+
 
 data InputStreamEntry r 
   = InputState r
@@ -102,7 +138,7 @@ serveLiveView liveview inputs =
       htmls = S.map _html liveViewResults
       diffs = S.zipWith diffHtml htmls (S.drop 1 htmls)
    in LiveViewOutputs
-        { _outputStream = S.mapMaybe fst outputWithLvrS, 
+        { _outputStream = S.mapMaybe (trace "outputStream entry" . fst) outputWithLvrS, 
           _mountList = (toSplitText initialHtml, Clock 0),
           _firstRender = initialHtml
         }

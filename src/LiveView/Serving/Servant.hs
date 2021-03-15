@@ -12,6 +12,7 @@ import Control.Lens
 import Data.Aeson
 import Data.Text qualified as T
 import Data.Text.Encoding
+import Debug.Trace
 import Import
 import LiveView.Html
 import LiveView.Serving
@@ -36,13 +37,16 @@ serveLiveViewServant :: forall r m. (MonadIO m, m ~ IO) => LiveView r () -> Serv
 serveLiveViewServant liveView servDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
     initialRenderEndpoint = do
+      liftIO $ putStrLn "initialRenderEndpoint"
       initialState <- (^. _1) <$> _subscribeToState servDeps
       let initialLiveHtml = _html $ getLiveViewResult initialState liveView
       pure $ doctypehtml_ $ do
         head_ $ title_ "LiveView test!!"
         body_ $ initialLiveHtml
     liveRenderEndpoint conn = do
+      liftIO $ putStrLn "liveRenderEndpoint"
       (initS, states, actionCallback) <- _subscribeToState servDeps
+      liftIO $ putStrLn "after _subscribeToState call"
       inpChan <- liftIO STM.newTChanIO
       let actionThread = forever $ do
             receivedMsg <- WS.receiveData conn
@@ -55,16 +59,22 @@ serveLiveViewServant liveView servDeps = initialRenderEndpoint :<|> liveRenderEn
                 STM.atomically $ STM.writeTChan inpChan (InputAction actionCall)
                 Prelude.putStrLn "wrote to chan"
           stateThread = S.mapM_ (\s -> do
+            putStrLn "in stateThread"
             STM.atomically $ STM.writeTChan inpChan $ InputState s
             Prelude.putStrLn "wrote state") states
       liftIO $ Async.withAsync actionThread $ \_ -> do
         liftIO $ Async.withAsync stateThread $ \_ -> do
           let inputStream :: Stream (Of (InputStreamEntry r)) m ()
-              inputStream = S.repeatM (liftIO $ STM.atomically $ STM.readTChan inpChan)
+              inputStream = S.repeatM (liftIO $ do
+                putStrLn "reading inpChan into inputStream"
+                x <- STM.atomically $ STM.readTChan inpChan
+                putStrLn "successfully read"
+                pure x)
               inputs = LiveViewInputs initS inputStream
               outputs = serveLiveView liveView inputs
               mountMsg = ((T.pack "mount", fst $ _mountList outputs), snd $ _mountList outputs)
           liftIO $ WS.sendTextData conn $ encode mountMsg
+          liftIO $ putStrLn "about to mapM_ over outputStream"
           flip S.mapM_ (_outputStream outputs) $ \case
               OutputAction call -> do
                 putStrLn "calling OutputAction"
