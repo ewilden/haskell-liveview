@@ -30,28 +30,30 @@ type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 -- TODO: serve static HTML as the page container!
 
 data ServantLVDeps r = ServantLVDeps
-  r
-  (Stream (Of r) IO ())
-  (LiveView r ())
-  (ActionCall -> IO ())
+  { _initialState :: r
+  , _states :: (Stream (Of r) IO ())
+  , _liveView :: (LiveView r ())
+  , _actionCallback :: (ActionCall -> IO ())
+  , _basePage :: Maybe (Html () -> Html ())
+  }
 
-data TeaDeps r msg = TeaDeps 
-  r
-  (ActionCall -> msg)
-
+defaultBasePage :: Html () -> Html ()
+defaultBasePage liveContent = do
+   doctypehtml_ $ do
+    head_ $ title_ "haskell liveview-simple"
+    body_ liveContent
 
 serveLVServant :: Handler (ServantLVDeps r) -> Server LiveViewApi
 serveLVServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
+    rootWrapper x = div_ [id_ "lvroot"] x
     initialRenderEndpoint = do
-      (ServantLVDeps initS stateS lv actionCallback) <- getDeps
+      (ServantLVDeps initS stateS lv actionCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "initialRenderEndpoint"
-      let initialLiveHtml = _html $ getLiveViewResult initS lv
-      pure $ doctypehtml_ $ do
-        head_ $ title_ "LiveView test!!"
-        body_ $ initialLiveHtml
+      let initialLiveHtml = rootWrapper $ _html $ getLiveViewResult initS lv
+      pure $ fromMaybe defaultBasePage mayBasePage initialLiveHtml
     liveRenderEndpoint conn = do
-      (ServantLVDeps initS stateS lv actionCallback) <- getDeps
+      (ServantLVDeps initS stateS lv actionCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
       let writeStatesToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepState) stateS
@@ -61,10 +63,11 @@ serveLVServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
       liftIO $ Async.concurrently_ writeStatesToInpChan
         $ Async.concurrently_ writeMessagesToInpChan
         $ serveLV $ LiveViewDeps
-            { _initialState = initS
-            , _inputStream = S.repeatM (atomically $ STM.readTChan inpChan)
-            , _liveView = lv
-            , _sendSocketMessage = WS.sendTextData conn
-            , _sendActionCall = actionCallback
-            , _debugPrint = const (pure ())
+            { _lvdInitialState = initS
+            , _lvdInputStream = S.repeatM (atomically $ STM.readTChan inpChan)
+            , _lvdLiveView = lv
+            , _lvdSendSocketMessage = WS.sendTextData conn
+            , _lvdSendActionCall = actionCallback
+            , _lvdRootWrapper = rootWrapper
+            , _lvdDebugPrint = const (pure ())
             }

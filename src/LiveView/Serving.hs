@@ -38,31 +38,33 @@ deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
 data DepInput r = DepState r | DepMessage BL.ByteString
 
 data LiveViewDeps r m = LiveViewDeps
-  { _initialState :: r
-  , _inputStream :: Stream (Of (DepInput r)) m ()
-  , _liveView :: LiveView r ()
-  , _sendSocketMessage :: BL.ByteString -> m ()
-  , _sendActionCall :: ActionCall -> m ()
-  , _debugPrint :: String -> m ()
+  { _lvdInitialState :: r
+  , _lvdInputStream :: Stream (Of (DepInput r)) m ()
+  , _lvdLiveView :: LiveView r ()
+  , _lvdSendSocketMessage :: BL.ByteString -> m ()
+  , _lvdSendActionCall :: ActionCall -> m ()
+  , _lvdRootWrapper :: L.Html () -> L.Html ()
+  , _lvdDebugPrint :: String -> m ()
   }
 
 serveLV :: (Monad m) => LiveViewDeps r m -> m ()
 serveLV deps = do
-  let getHtml r = _html $ getLiveViewResult r (_liveView deps)
-      initHtml = getHtml (_initialState deps)
+  let getHtml r = _lvdRootWrapper deps $
+        _html $ getLiveViewResult r (_lvdLiveView deps)
+      initHtml = getHtml (_lvdInitialState deps)
       mountList = toSplitText initHtml
-  _debugPrint deps "start"
-  _sendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
+  _lvdDebugPrint deps "start"
+  _lvdSendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
   flip evalStateT (initHtml, Clock 0) 
-    $ flip S.mapM_ (hoist lift $ _inputStream deps) $ \case 
+    $ flip S.mapM_ (hoist lift $ _lvdInputStream deps) $ \case 
         DepState r -> do
-          lift $ _debugPrint deps "DepState"
+          lift $ _lvdDebugPrint deps "DepState"
           let nowHtml = getHtml r
           prevHtml <- _1 <<.= nowHtml
           clock <- _2 <%= succ
-          lift $ _sendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
+          lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
         DepMessage rawMessage -> do
-          lift $ _debugPrint deps "DepMessage"
+          lift $ _lvdDebugPrint deps "DepMessage"
           case (decode rawMessage :: Maybe (ActionCall, Clock)) of
             Nothing -> pure ()
-            Just (call, clock) -> lift $ _sendActionCall deps call
+            Just (call, clock) -> lift $ _lvdSendActionCall deps call

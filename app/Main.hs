@@ -30,23 +30,23 @@ api = Proxy
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
 sampleLiveView :: LiveView (Float, Op, Float) ()
-sampleLiveView = div_ [id_ "lvroot"] $ do
+sampleLiveView = do
   (x, op, y) <- ask
   onChangeX <- makeHsaction "change" "change_x"
-  input_ [value_ $ tshow x, hsaction_ onChangeX]
+  input_ [value_ $ tshow x, hsaction_ onChangeX, type_ "number"]
   onChangeOp <- makeHsaction "change" "change_op"
   select_ [hsaction_ onChangeOp] $ forM_ [Add, Subtract, Multiply, Divide] $ \op' ->
     option_ ([value_ $ tshow op'] ++ if op == op' then [selected_ "true"] else []) 
       $ fromString $ show op'
   onChangeY <- makeHsaction "change" "change_y"
-  input_ [value_ $ tshow y, hsaction_ onChangeY]
+  input_ [value_ $ tshow y, hsaction_ onChangeY, type_ "number"]
   " = "
   let opFn = case op of
         Add -> (+)
         Subtract -> (-)
         Multiply -> (*)
         Divide -> (/)
-  input_ [value_ $ tshow (opFn x y)]
+  input_ [value_ $ tshow (opFn x y), type_ "number", readonly_ "true"]
   script_ [src_ "index.js"] $ T.pack ""
 
 reducer :: ActionCall -> State (Float, Op, Float) ()
@@ -73,7 +73,7 @@ server = serveLVServant (do
                     STM.writeTChan stateChan nextState
                     STM.writeTVar currStateTV nextState
                   Prelude.putStrLn "actionCallback 2"
-            pure $ ServantLVDeps initS stateStream sampleLiveView actionCallback
+            pure $ ServantLVDeps initS stateStream sampleLiveView actionCallback Nothing
           ) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
