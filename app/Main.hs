@@ -59,30 +59,11 @@ reducer (ActionCall action payload) =
     _2 .= (read $ T.unpack $ payload ^?! ix "value")
   else pure ()
 
-server_old :: ServerT API IO
-server_old = serveLiveViewServant sampleLiveView deps :<|> serveDirectoryWebApp "static"
-  where deps = ServantDeps 
-                { _subscribeToState = do
-                    let initS = (1, Add, 1)
-                    stateChan <- liftIO STM.newTChanIO
-                    currStateTV <- liftIO (STM.newTVarIO initS)
-                    let stateStream = S.repeatM (atomically $ STM.readTChan stateChan)
-                        actionCallback action = do
-                          liftIO $ Prelude.putStrLn "actionCallback"
-                          liftIO $ atomically $ do
-                            currState <- STM.readTVar currStateTV
-                            let nextState = execState (reducer action) currState
-                            STM.writeTChan stateChan nextState
-                            STM.writeTVar currStateTV nextState
-                          liftIO $ Prelude.putStrLn "actionCallback 2"
-                    pure (initS, stateStream, actionCallback)
-                }
-
 server :: Server API
 server = serveLVServant (do
             let initS = (1, Add, 1)
-            stateChan <- STM.newTChanIO
-            currStateTV <- (STM.newTVarIO initS)
+            stateChan <- liftIO STM.newTChanIO
+            currStateTV <- liftIO (STM.newTVarIO initS)
             let stateStream = S.repeatM (atomically $ STM.readTChan stateChan)
                 actionCallback action = do
                   Prelude.putStrLn "actionCallback"
@@ -94,9 +75,6 @@ server = serveLVServant (do
                   Prelude.putStrLn "actionCallback 2"
             pure $ ServantLVDeps initS stateStream sampleLiveView actionCallback
           ) :<|> serveDirectoryWebApp "static"
-
-main_old :: IO ()
-main_old = Warp.run 5000 (serve api (hoistServer api liftIO server_old))
 
 main :: IO ()
 main = Warp.run 5000 (serve api server)

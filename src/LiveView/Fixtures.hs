@@ -18,10 +18,10 @@ import Lucid
 import Streaming
 import qualified Streaming.Prelude as S
 
-genStateOnlyLiveViewInputs :: (MonadGen g) => g r -> g [InputStreamEntry r] 
+genStateOnlyLiveViewInputs :: (MonadGen g) => g r -> g [DepInput r] 
 genStateOnlyLiveViewInputs genR = do
   len <- Gen.int (Range.linear 0 100)
-  forM [0..len] $ \i -> InputState <$> genR
+  forM [0..len] $ \i -> DepState <$> genR
 
 modTmpl :: (Monad m) => Int -> Int -> HtmlT m ()
 modTmpl n modulus = "mod " <> toHtml (show modulus) <> ": " <> toHtml (show (n `mod` modulus))
@@ -37,10 +37,10 @@ testIntLiveView = do
 
 newtype ClientsidePatchError = ClientsidePatchError T.Text deriving Show
 
-toClientsidePatchlist :: (Monad m) => LiveViewOutputs m -> Stream (Of ([T.Text], Clock)) (ExceptT ClientsidePatchError m) ()
-toClientsidePatchlist outputs = S.scanM handlePatch (pure $ _mountList outputs) pure (hoist lift $ filterForPatches $ _outputStream outputs)
-  where filterForPatches = S.mapMaybe (\case OutputPatch x -> Just x; _ -> Nothing)
-        handlePatch x@(textList, Clock prev) a@(patchList, Clock next) = do
-          if next /= prev + 1
-            then throwError (ClientsidePatchError $ "Mismatched clocks: " <> tshow (x, a))
-            else pure (applyPatch textList patchList, (Clock next))
+-- toClientsidePatchlist :: (Monad m) => LiveViewOutputs m -> Stream (Of ([T.Text], Clock)) (ExceptT ClientsidePatchError m) ()
+-- toClientsidePatchlist outputs = S.scanM handlePatch (pure $ _mountList outputs) pure (hoist lift $ filterForPatches $ _outputStream outputs)
+--   where filterForPatches = S.mapMaybe (\case OutputPatch x -> Just x; _ -> Nothing)
+--         handlePatch x@(textList, Clock prev) a@(patchList, Clock next) = do
+--           if next /= prev + 1
+--             then throwError (ClientsidePatchError $ "Mismatched clocks: " <> tshow (x, a))
+--             else pure (applyPatch textList patchList, (Clock next))
