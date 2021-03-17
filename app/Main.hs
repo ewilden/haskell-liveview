@@ -47,17 +47,13 @@ sampleLiveView = do
         Multiply -> (*)
         Divide -> (/)
   input_ [value_ $ tshow (opFn x y), type_ "number", readonly_ "true"]
-  script_ [src_ "index.js"] $ T.pack ""
 
 reducer :: ActionCall -> State (Float, Op, Float) ()
-reducer (ActionCall action payload) =
-  if action == "change_x" then
-    _1 .= (read $ T.unpack $ payload ^?! ix "value")
-  else if action == "change_y" then
-    _3 .= (read $ T.unpack $ payload ^?! ix "value")
-  else if action == "change_op" then
-    _2 .= (read $ T.unpack $ payload ^?! ix "value")
-  else pure ()
+reducer (ActionCall action payload)
+  | action == "change_x" = _1 .= read (T.unpack $ payload ^?! ix "value")
+  | action == "change_y" = _3 .= read (T.unpack $ payload ^?! ix "value")
+  | action == "change_op" = _2 .= read (T.unpack $ payload ^?! ix "value")
+  | otherwise = pure ()
 
 server :: Server API
 server = serveLVServant (do
@@ -73,7 +69,7 @@ server = serveLVServant (do
                     STM.writeTChan stateChan nextState
                     STM.writeTVar currStateTV nextState
                   Prelude.putStrLn "actionCallback 2"
-            pure $ ServantLVDeps initS stateStream sampleLiveView actionCallback Nothing
+            pure $ ServantLVDeps initS stateStream sampleLiveView (S.mapM_ actionCallback) Nothing
           ) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()

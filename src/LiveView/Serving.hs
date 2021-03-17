@@ -42,29 +42,46 @@ data LiveViewDeps r m = LiveViewDeps
   , _lvdInputStream :: Stream (Of (DepInput r)) m ()
   , _lvdLiveView :: LiveView r ()
   , _lvdSendSocketMessage :: BL.ByteString -> m ()
-  , _lvdSendActionCall :: ActionCall -> m ()
   , _lvdRootWrapper :: L.Html () -> L.Html ()
   , _lvdDebugPrint :: String -> m ()
   }
 
-serveLV :: (Monad m) => LiveViewDeps r m -> m ()
+ofFst :: Of a b -> a
+ofFst (a Streaming.:> b) = a
+
+type StatefulStreamPair m = ((L.Html (), Clock), Stream (Of ActionCall) (StateT (L.Html (), Clock) m) ())
+
+resolveState :: (Monad m) => s -> Stream (Of a) (StateT s m) r -> Stream (Of a) m (r, s)
+resolveState s stream = S.unfoldr unfoldFn (s, stream)
+  where unfoldFn (currState, stream) = do
+          (eithNextResult, nextState) <- runStateT (S.next stream) currState
+          case eithNextResult of
+            Left r -> pure $ Left (r, nextState)
+            Right (a, stream') -> pure $ Right (a, (nextState, stream'))
+
+serveLV :: forall r m. (Monad m) => LiveViewDeps r m -> Stream (Of ActionCall) m ()
 serveLV deps = do
   let getHtml r = _lvdRootWrapper deps $
         _html $ getLiveViewResult r (_lvdLiveView deps)
       initHtml = getHtml (_lvdInitialState deps)
       mountList = toSplitText initHtml
-  _lvdDebugPrint deps "start"
-  _lvdSendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
-  flip evalStateT (initHtml, Clock 0) 
-    $ flip S.mapM_ (hoist lift $ _lvdInputStream deps) $ \case 
+  lift $ _lvdDebugPrint deps "start"
+  lift $ _lvdSendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
+  let asStatefulStream :: Stream (Of (DepInput r)) (StateT (L.Html (), Clock) m) ()
+      asStatefulStream = hoist lift $ _lvdInputStream deps
+      actionCallStatefulStream :: Stream (Of ActionCall) (StateT (L.Html (), Clock) m) ()
+      actionCallStatefulStream = S.for asStatefulStream $ \case
         DepState r -> do
-          lift $ _lvdDebugPrint deps "DepState"
+          lift $ lift $ _lvdDebugPrint deps "DepState"
           let nowHtml = getHtml r
           prevHtml <- _1 <<.= nowHtml
           clock <- _2 <%= succ
-          lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
+          lift $ lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
         DepMessage rawMessage -> do
-          lift $ _lvdDebugPrint deps "DepMessage"
+          lift $ lift $ _lvdDebugPrint deps "DepMessage"
           case (decode rawMessage :: Maybe (ActionCall, Clock)) of
             Nothing -> pure ()
-            Just (call, clock) -> lift $ _lvdSendActionCall deps call
+            Just (call, clock) -> do
+              lift $ lift $ _lvdDebugPrint deps "yield call"
+              S.yield call
+  void $ resolveState (initHtml, Clock 0) actionCallStatefulStream

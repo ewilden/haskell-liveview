@@ -31,9 +31,9 @@ type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 
 data ServantLVDeps r = ServantLVDeps
   { _initialState :: r
-  , _states :: (Stream (Of r) IO ())
-  , _liveView :: (LiveView r ())
-  , _actionCallback :: (ActionCall -> IO ())
+  , _states :: Stream (Of r) IO ()
+  , _liveView :: LiveView r ()
+  , _actionsCallback :: Stream (Of ActionCall) IO () -> IO ()
   , _basePage :: Maybe (Html () -> Html ())
   }
 
@@ -42,6 +42,7 @@ defaultBasePage liveContent = do
    doctypehtml_ $ do
     head_ $ title_ "haskell liveview-simple"
     body_ liveContent
+    script_ [src_ "index.js"] $ T.pack ""
 
 serveLVServant :: Handler (ServantLVDeps r) -> Server LiveViewApi
 serveLVServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
@@ -53,21 +54,20 @@ serveLVServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
       let initialLiveHtml = rootWrapper $ _html $ getLiveViewResult initS lv
       pure $ fromMaybe defaultBasePage mayBasePage initialLiveHtml
     liveRenderEndpoint conn = do
-      (ServantLVDeps initS stateS lv actionCallback mayBasePage) <- getDeps
+      (ServantLVDeps initS stateS lv actionsCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
       let writeStatesToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepState) stateS
           writeMessagesToInpChan = forever $ do
             rawMsg <- WS.receiveData conn
             atomically $ STM.writeTChan inpChan $ DepMessage rawMsg
-      liftIO $ Async.concurrently_ writeStatesToInpChan
-        $ Async.concurrently_ writeMessagesToInpChan
-        $ serveLV $ LiveViewDeps
+      liftIO $ Async.race_ writeStatesToInpChan
+        $ Async.race_ writeMessagesToInpChan
+        $ actionsCallback $ serveLV $ LiveViewDeps
             { _lvdInitialState = initS
             , _lvdInputStream = S.repeatM (atomically $ STM.readTChan inpChan)
             , _lvdLiveView = lv
             , _lvdSendSocketMessage = WS.sendTextData conn
-            , _lvdSendActionCall = actionCallback
             , _lvdRootWrapper = rootWrapper
-            , _lvdDebugPrint = const (pure ())
+            , _lvdDebugPrint = putStrLn
             }
