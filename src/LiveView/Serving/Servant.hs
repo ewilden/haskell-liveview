@@ -29,10 +29,9 @@ type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 
 -- TODO: serve static HTML as the page container!
 
-data ServantDeps r = ServantDeps
-  { _initialState :: r
-  , _states :: Stream (Of r) IO ()
-  , _liveView :: LiveView r ()
+data ServantDeps = ServantDeps
+  { _initialHtml :: Html ()
+  , _htmls :: Stream (Of (Html ())) IO ()
   , _actionsCallback :: Stream (Of ActionCall) IO () -> IO ()
   , _basePage :: Maybe (Html () -> Html ())
   }
@@ -44,30 +43,27 @@ defaultBasePage liveContent = do
     body_ liveContent
     script_ [src_ "index.js"] $ T.pack ""
 
-serveLiveViewServant :: Handler (ServantDeps r) -> Server LiveViewApi
+serveLiveViewServant :: Handler ServantDeps -> Server LiveViewApi
 serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
     rootWrapper x = div_ [id_ "lvroot"] x
     initialRenderEndpoint = do
-      (ServantDeps initS stateS lv actionCallback mayBasePage) <- getDeps
+      (ServantDeps initHtml htmls actionCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "initialRenderEndpoint"
-      let initialLiveHtml = rootWrapper $ _html $ getLiveViewResult initS lv
-      pure $ fromMaybe defaultBasePage mayBasePage initialLiveHtml
+      pure $ fromMaybe defaultBasePage mayBasePage (rootWrapper initHtml)
     liveRenderEndpoint conn = do
-      (ServantDeps initS stateS lv actionsCallback mayBasePage) <- getDeps
+      (ServantDeps initHtml htmls actionsCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
-      let writeStatesToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepState) stateS
+      let writeHtmlsToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepHtml . rootWrapper) htmls
           writeMessagesToInpChan = forever $ do
             rawMsg <- WS.receiveData conn
             atomically $ STM.writeTChan inpChan $ DepMessage rawMsg
-      liftIO $ Async.race_ writeStatesToInpChan
+      liftIO $ Async.race_ writeHtmlsToInpChan
         $ Async.race_ writeMessagesToInpChan
         $ actionsCallback $ serveLV $ LiveViewDeps
-            { _lvdInitialState = initS
+            { _lvdInitialHtml = rootWrapper initHtml
             , _lvdInputStream = S.repeatM (atomically $ STM.readTChan inpChan)
-            , _lvdLiveView = lv
             , _lvdSendSocketMessage = WS.sendTextData conn
-            , _lvdRootWrapper = rootWrapper
             , _lvdDebugPrint = putStrLn
             }

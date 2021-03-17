@@ -113,21 +113,6 @@ newtype LiveM r a = LiveM
   }
   deriving (Functor, Applicative, Monad, MonadReader r)
 
-type LiveView r a = L.HtmlT (LiveM r) a
-
-runLiveView :: LiveView r () -> Reader r (L.Html ())
-runLiveView htmlT = L.commuteHtmlT htmlT & runLiveM
-
-data LiveViewResult = LiveViewResult
-  { _html :: L.Html ()
-  }
-
-toLiveViewResult :: r -> Reader r (L.Html ()) -> LiveViewResult
-toLiveViewResult r m = runReader m r & LiveViewResult
-
-getLiveViewResult :: r -> LiveView r () -> LiveViewResult
-getLiveViewResult r = toLiveViewResult r . runLiveView
-
 {-
 
 BINDING	ATTRIBUTES

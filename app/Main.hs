@@ -17,10 +17,12 @@ import LiveView.Html
 import LiveView.Serving
 import LiveView.Serving.Servant
 import Lucid
+import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
 import Streaming
 import Streaming.Prelude qualified as S
+import Text.Read
 
 type API = LiveViewApi :<|> Raw
 
@@ -29,7 +31,7 @@ api = Proxy
 
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
-sampleLiveView :: LiveView (Float, Op, Float) ()
+sampleLiveView :: HtmlT (Reader (Float, Op, Float)) ()
 sampleLiveView = do
   (x, op, y) <- ask
   onChangeX <- makeHsaction "change" "change_x"
@@ -50,9 +52,9 @@ sampleLiveView = do
 
 reducer :: ActionCall -> State (Float, Op, Float) ()
 reducer (ActionCall action payload)
-  | action == "change_x" = _1 .= read (T.unpack $ payload ^?! ix "value")
-  | action == "change_y" = _3 .= read (T.unpack $ payload ^?! ix "value")
-  | action == "change_op" = _2 .= read (T.unpack $ payload ^?! ix "value")
+  | action == "change_x" = _1 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
+  | action == "change_y" = _3 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
+  | action == "change_op" = _2 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
   | otherwise = pure ()
 
 server :: Server API
@@ -69,7 +71,8 @@ server = serveLiveViewServant (do
                     STM.writeTChan stateChan nextState
                     STM.writeTVar currStateTV nextState
                   Prelude.putStrLn "actionCallback 2"
-            pure $ ServantDeps initS stateStream sampleLiveView (S.mapM_ actionCallback) Nothing
+                toHtml s = runReader (commuteHtmlT sampleLiveView) s
+            pure $ ServantDeps (toHtml initS) (S.map toHtml stateStream) (S.mapM_ actionCallback) Nothing
           ) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()

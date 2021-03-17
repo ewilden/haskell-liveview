@@ -35,14 +35,12 @@ data ActionCall = ActionCall
 
 deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
 
-data DepInput r = DepState r | DepMessage BL.ByteString
+data DepInput = DepHtml (L.Html ()) | DepMessage BL.ByteString
 
 data LiveViewDeps r m = LiveViewDeps
-  { _lvdInitialState :: r
-  , _lvdInputStream :: Stream (Of (DepInput r)) m ()
-  , _lvdLiveView :: LiveView r ()
+  { _lvdInitialHtml :: L.Html ()
+  , _lvdInputStream :: Stream (Of DepInput) m ()
   , _lvdSendSocketMessage :: BL.ByteString -> m ()
-  , _lvdRootWrapper :: L.Html () -> L.Html ()
   , _lvdDebugPrint :: String -> m ()
   }
 
@@ -56,22 +54,19 @@ commuteState s stream = S.unfoldr unfoldFn (s, stream)
 
 serveLV :: forall r m. (Monad m) => LiveViewDeps r m -> Stream (Of ActionCall) m ()
 serveLV deps = do
-  let getHtml r = _lvdRootWrapper deps $
-        _html $ getLiveViewResult r (_lvdLiveView deps)
-      initHtml = getHtml (_lvdInitialState deps)
+  let initHtml = _lvdInitialHtml deps
       mountList = toSplitText initHtml
   lift $ _lvdDebugPrint deps "start"
   lift $ _lvdSendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
-  let asStatefulStream :: Stream (Of (DepInput r)) (StateT (L.Html (), Clock) m) ()
+  let asStatefulStream :: Stream (Of DepInput) (StateT (L.Html (), Clock) m) ()
       asStatefulStream = hoist lift $ _lvdInputStream deps
       actionCallStatefulStream :: Stream (Of ActionCall) (StateT (L.Html (), Clock) m) ()
       actionCallStatefulStream = S.for asStatefulStream $ \case
-        DepState r -> do
+        DepHtml h -> do
           lift $ lift $ _lvdDebugPrint deps "DepState"
-          let nowHtml = getHtml r
-          prevHtml <- _1 <<.= nowHtml
+          prevHtml <- _1 <<.= h
           clock <- _2 <%= succ
-          lift $ lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml nowHtml), clock)
+          lift $ lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml h), clock)
         DepMessage rawMessage -> do
           lift $ lift $ _lvdDebugPrint deps "DepMessage"
           case (decode rawMessage :: Maybe (ActionCall, Clock)) of

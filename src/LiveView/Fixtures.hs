@@ -18,24 +18,24 @@ import Lucid
 import Streaming
 import qualified Streaming.Prelude as S
 
-genStateOnlyLiveViewInputs :: (MonadGen g) => g r -> g [DepInput r] 
-genStateOnlyLiveViewInputs genR = do
-  len <- Gen.int (Range.linear 0 100)
-  forM [0..len] $ \i -> DepState <$> genR
+-- genStateOnlyLiveViewInputs :: (MonadGen g) => g r -> g [DepInput r] 
+-- genStateOnlyLiveViewInputs genR = do
+--   len <- Gen.int (Range.linear 0 100)
+--   forM [0..len] $ \i -> DepState <$> genR
 
-modTmpl :: (Monad m) => Int -> Int -> HtmlT m ()
-modTmpl n modulus = "mod " <> toHtml (show modulus) <> ": " <> toHtml (show (n `mod` modulus))
+-- modTmpl :: (Monad m) => Int -> Int -> HtmlT m ()
+-- modTmpl n modulus = "mod " <> toHtml (show modulus) <> ": " <> toHtml (show (n `mod` modulus))
 
-testIntLiveView :: LiveView Int ()
-testIntLiveView = do
-  ul_ [id_ "root"] $ do
-    i <- ask
-    li_ $ "original: " <> toHtml (show i)
-    mapM_ (li_ . modTmpl i) [2, 3, 5, 7, 10]
-    submitAction <- makeHsaction "click" "submit"
-    button_ [hsaction_ submitAction] "submit"
+-- testIntLiveView :: LiveView Int ()
+-- testIntLiveView = do
+--   ul_ [id_ "root"] $ do
+--     i <- ask
+--     li_ $ "original: " <> toHtml (show i)
+--     mapM_ (li_ . modTmpl i) [2, 3, 5, 7, 10]
+--     submitAction <- makeHsaction "click" "submit"
+--     button_ [hsaction_ submitAction] "submit"
 
-newtype ClientsidePatchError = ClientsidePatchError T.Text deriving Show
+-- newtype ClientsidePatchError = ClientsidePatchError T.Text deriving Show
 
 -- toClientsidePatchlist :: (Monad m) => LiveViewOutputs m -> Stream (Of ([T.Text], Clock)) (ExceptT ClientsidePatchError m) ()
 -- toClientsidePatchlist outputs = S.scanM handlePatch (pure $ _mountList outputs) pure (hoist lift $ filterForPatches $ _outputStream outputs)
