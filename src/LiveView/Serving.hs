@@ -46,13 +46,8 @@ data LiveViewDeps r m = LiveViewDeps
   , _lvdDebugPrint :: String -> m ()
   }
 
-ofFst :: Of a b -> a
-ofFst (a Streaming.:> b) = a
-
-type StatefulStreamPair m = ((L.Html (), Clock), Stream (Of ActionCall) (StateT (L.Html (), Clock) m) ())
-
-resolveState :: (Monad m) => s -> Stream (Of a) (StateT s m) r -> Stream (Of a) m (r, s)
-resolveState s stream = S.unfoldr unfoldFn (s, stream)
+commuteState :: (Monad m) => s -> Stream (Of a) (StateT s m) r -> Stream (Of a) m (r, s)
+commuteState s stream = S.unfoldr unfoldFn (s, stream)
   where unfoldFn (currState, stream) = do
           (eithNextResult, nextState) <- runStateT (S.next stream) currState
           case eithNextResult of
@@ -84,4 +79,4 @@ serveLV deps = do
             Just (call, clock) -> do
               lift $ lift $ _lvdDebugPrint deps "yield call"
               S.yield call
-  void $ resolveState (initHtml, Clock 0) actionCallStatefulStream
+  void $ commuteState (initHtml, Clock 0) actionCallStatefulStream

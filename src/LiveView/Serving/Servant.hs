@@ -29,7 +29,7 @@ type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 
 -- TODO: serve static HTML as the page container!
 
-data ServantLVDeps r = ServantLVDeps
+data ServantDeps r = ServantDeps
   { _initialState :: r
   , _states :: Stream (Of r) IO ()
   , _liveView :: LiveView r ()
@@ -44,17 +44,17 @@ defaultBasePage liveContent = do
     body_ liveContent
     script_ [src_ "index.js"] $ T.pack ""
 
-serveLVServant :: Handler (ServantLVDeps r) -> Server LiveViewApi
-serveLVServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
+serveLiveViewServant :: Handler (ServantDeps r) -> Server LiveViewApi
+serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
     rootWrapper x = div_ [id_ "lvroot"] x
     initialRenderEndpoint = do
-      (ServantLVDeps initS stateS lv actionCallback mayBasePage) <- getDeps
+      (ServantDeps initS stateS lv actionCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "initialRenderEndpoint"
       let initialLiveHtml = rootWrapper $ _html $ getLiveViewResult initS lv
       pure $ fromMaybe defaultBasePage mayBasePage initialLiveHtml
     liveRenderEndpoint conn = do
-      (ServantLVDeps initS stateS lv actionsCallback mayBasePage) <- getDeps
+      (ServantDeps initS stateS lv actionsCallback mayBasePage) <- getDeps
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
       let writeStatesToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepState) stateS

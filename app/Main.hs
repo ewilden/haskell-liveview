@@ -56,7 +56,7 @@ reducer (ActionCall action payload)
   | otherwise = pure ()
 
 server :: Server API
-server = serveLVServant (do
+server = serveLiveViewServant (do
             let initS = (1, Add, 1)
             stateChan <- liftIO STM.newTChanIO
             currStateTV <- liftIO (STM.newTVarIO initS)
@@ -69,7 +69,7 @@ server = serveLVServant (do
                     STM.writeTChan stateChan nextState
                     STM.writeTVar currStateTV nextState
                   Prelude.putStrLn "actionCallback 2"
-            pure $ ServantLVDeps initS stateStream sampleLiveView (S.mapM_ actionCallback) Nothing
+            pure $ ServantDeps initS stateStream sampleLiveView (S.mapM_ actionCallback) Nothing
           ) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
