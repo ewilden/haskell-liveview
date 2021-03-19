@@ -24,10 +24,6 @@ import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
 
-type API = LiveViewApi :<|> Raw
-
-api :: Proxy API
-api = Proxy
 
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
@@ -57,6 +53,11 @@ reducer (ActionCall action payload)
   | action == "change_op" = _2 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
   | otherwise = pure ()
 
+type API = LiveViewApi :<|> Raw
+
+api :: Proxy API
+api = Proxy
+
 server :: Server API
 server = serveLiveViewServant (do
             let initS = (1, Add, 1)
@@ -72,7 +73,15 @@ server = serveLiveViewServant (do
                     STM.writeTVar currStateTV nextState
                   Prelude.putStrLn "actionCallback 2"
                 toHtml s = runReader (commuteHtmlT sampleLiveView) s
-            pure $ ServantDeps (toHtml initS) (S.map toHtml stateStream) (S.mapM_ actionCallback) Nothing
+            pure $ ServantDeps 
+              (toHtml initS) 
+              (S.map toHtml stateStream) 
+              (S.mapM_ actionCallback) 
+              (DefaultBasePage $ ScriptData 
+                { _liveViewScriptAbsolutePath = "/liveview.js"
+                , _wssUrl = "ws://localhost:5000/liveview"
+                })
+              "lvroot"
           ) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()

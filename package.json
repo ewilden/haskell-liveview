@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "tsc --build tsconfig.json && jest",
-    "build": "tsc --noemit && esbuild src/index.ts --bundle --outfile=static/index.js"
+    "build": "tsc --noemit && esbuild src/live_view.ts --bundle --format=esm --outfile=static/liveview.js",
+    "buildall": "tsc --noemit && esbuild src/live_view.ts --bundle --format=esm --outfile=static/liveview.js && stack build"
   },
   "repository": {
     "type": "git",

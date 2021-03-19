@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module LiveView.Serving.Servant where
 
@@ -18,6 +19,7 @@ import Import
 import LiveView.Html
 import LiveView.Serving
 import Lucid
+import NeatInterpolation
 import Network.WebSockets qualified as WS
 import Servant hiding (Stream)
 import Servant.API.WebSocket
@@ -27,32 +29,48 @@ import Streaming.Prelude qualified as S
 
 type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 
+data ScriptData = ScriptData 
+  { _liveViewScriptAbsolutePath :: T.Text
+  , _wssUrl :: T.Text
+  }
+
+data BasePageSpec 
+  = DefaultBasePage ScriptData
+  | CustomBasePage (Html () -> Html ())
+
 -- TODO: serve static HTML as the page container!
 
 data ServantDeps = ServantDeps
   { _initialHtml :: Html ()
   , _htmls :: Stream (Of (Html ())) IO ()
   , _actionsCallback :: Stream (Of ActionCall) IO () -> IO ()
-  , _basePage :: Maybe (Html () -> Html ())
+  , _basePage :: BasePageSpec
+  , _rootId :: T.Text
   }
 
-defaultBasePage :: Html () -> Html ()
-defaultBasePage liveContent = do
+defaultBasePage :: T.Text -> ScriptData -> Html () -> Html ()
+defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrl) liveContent = do
    doctypehtml_ $ do
     head_ $ title_ "haskell liveview-simple"
     body_ liveContent
-    script_ [src_ "index.js"] $ T.pack ""
+    script_ [type_ "module"] [trimming|
+        import {attach} from "$liveViewScriptAbsolutePath";
+        attach(document.getElementById("$rootId"), "$wssUrl");
+      |]
 
 serveLiveViewServant :: Handler ServantDeps -> Server LiveViewApi
 serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
   where
-    rootWrapper x = div_ [id_ "lvroot"] x
     initialRenderEndpoint = do
-      (ServantDeps initHtml htmls actionCallback mayBasePage) <- getDeps
+      (ServantDeps initHtml htmls actionCallback basePage rootId) <- getDeps
+      let rootWrapper x = div_ [id_ rootId] x
       liftIO $ putStrLn "initialRenderEndpoint"
-      pure $ fromMaybe defaultBasePage mayBasePage (rootWrapper initHtml)
+      pure $ (case basePage of
+        DefaultBasePage scriptData -> defaultBasePage rootId scriptData
+        CustomBasePage f -> f) (rootWrapper initHtml)
     liveRenderEndpoint conn = do
-      (ServantDeps initHtml htmls actionsCallback mayBasePage) <- getDeps
+      (ServantDeps initHtml htmls actionsCallback mayBasePage rootId) <- getDeps
+      let rootWrapper x = div_ [id_ rootId] x
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
       let writeHtmlsToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepHtml . rootWrapper) htmls
