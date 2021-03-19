@@ -21,6 +21,7 @@ import LiveView.Serving
 import Lucid
 import NeatInterpolation
 import Network.WebSockets qualified as WS
+import Network.WebSockets.Connection (withPingThread)
 import Servant hiding (Stream)
 import Servant.API.WebSocket
 import Servant.HTML.Lucid
@@ -55,7 +56,15 @@ defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrl) liveConten
     body_ liveContent
     script_ [type_ "module"] [trimming|
         import {attach} from "$liveViewScriptAbsolutePath";
-        attach(document.getElementById("$rootId"), "$wssUrl");
+        (async () => {
+          while (true) {
+            try {
+              await attach(document.getElementById("$rootId"), "$wssUrl");
+            } catch (e) {
+              // pass
+            }
+          }
+        })();
       |]
 
 serveLiveViewServant :: Handler ServantDeps -> Server LiveViewApi
@@ -74,7 +83,7 @@ serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
       liftIO $ putStrLn "liveRenderEndpoint"
       inpChan <- liftIO STM.newTChanIO
       let writeHtmlsToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepHtml . rootWrapper) htmls
-          writeMessagesToInpChan = forever $ do
+          writeMessagesToInpChan = withPingThread conn 30 (pure ()) $ forever $ do
             rawMsg <- WS.receiveData conn
             atomically $ STM.writeTChan inpChan $ DepMessage rawMsg
       liftIO $ Async.race_ writeHtmlsToInpChan

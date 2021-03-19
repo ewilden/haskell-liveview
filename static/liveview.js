@@ -1637,6 +1637,7 @@ function latest(contenders) {
 }
 
 // src/live_view.ts
+var DEBUG = false;
 function mkHandle(url) {
   const webSocket = new WebSocket(url);
   const messages = new Repeater(async (push2, stop2) => {
@@ -1645,7 +1646,9 @@ function mkHandle(url) {
       webSocket.addEventListener("error", (event) => resolve({type: "error", event}));
       webSocket.addEventListener("message", (event) => {
         push2({type: "message", event});
-        console.log(event);
+        if (DEBUG) {
+          console.log(event);
+        }
       });
     });
   });
@@ -1659,9 +1662,17 @@ function mkHandle(url) {
   };
 }
 function parseWSMessage(wsMessage) {
-  console.log("parsing");
-  const parsed = JSON.parse(wsMessage.event.data);
-  console.log(parsed);
+  if (DEBUG) {
+    console.log("parsing");
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(wsMessage.event.data);
+  } catch (e) {
+  }
+  if (DEBUG) {
+    console.log(parsed);
+  }
   return parsed;
 }
 function applyPatch(currArray, patches) {
@@ -1686,8 +1697,10 @@ async function attach(root, wsUrl) {
   let currClock = 0;
   let currArray;
   let cleanup = instrumentHsaction(root, (call) => {
-    console.log("sending");
-    console.log(call);
+    if (DEBUG) {
+      console.log("sending");
+      console.log(call);
+    }
     ws.send(JSON.stringify([call, currClock]));
   });
   try {
@@ -1702,7 +1715,11 @@ async function attach(root, wsUrl) {
           }
         } else {
           const rawMessage = nxt.value;
-          const [msg, clock] = parseWSMessage(rawMessage);
+          const mayParsedMessage = parseWSMessage(rawMessage);
+          if (!mayParsedMessage) {
+            continue;
+          }
+          const [msg, clock] = mayParsedMessage;
           currClock = clock;
           if (msg[0] === "mount") {
             currArray = msg[1];
@@ -1713,13 +1730,17 @@ async function attach(root, wsUrl) {
             currArray = applyPatch(currArray, msg[1]);
           }
           const toMorph = `${currArray.join("")}`;
-          console.log("morphing");
-          console.log(toMorph);
+          if (DEBUG) {
+            console.log("morphing");
+            console.log(toMorph);
+          }
           cleanup();
           morphdom_esm_default(root, toMorph);
           cleanup = instrumentHsaction(root, (call) => {
-            console.log("sending");
-            console.log(call);
+            if (DEBUG) {
+              console.log("sending");
+              console.log(call);
+            }
             ws.send(JSON.stringify([call, currClock]));
           });
         }

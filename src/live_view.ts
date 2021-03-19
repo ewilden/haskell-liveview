@@ -2,6 +2,8 @@ import {instrumentHsaction} from './hsaction';
 import morphdom from 'morphdom';
 import { Repeater, Push, Stop } from "@repeaterjs/repeater";
 
+const DEBUG: boolean = false;
+
 interface WSMessage {
   type: "message";
   event: MessageEvent;
@@ -43,7 +45,9 @@ function mkHandle(url: string): WebSocketHandle {
         webSocket.addEventListener("error", event => resolve({type: "error", event}));
         webSocket.addEventListener("message", event => {
           push({type: "message", event});
-          console.log(event);
+          if (DEBUG) {
+            console.log(event);
+          }
         });
       });
     });
@@ -63,11 +67,20 @@ type LiveViewPatchMessage = ["patch", PatchEntry[]];
 
 type LiveViewMessage = [LiveViewMountMessage | LiveViewPatchMessage, number];
 
-function parseWSMessage(wsMessage: WSMessage): LiveViewMessage {
+function parseWSMessage(wsMessage: WSMessage): LiveViewMessage|null {
   // TODO: validate
-  console.log('parsing');
-  const parsed = JSON.parse(wsMessage.event.data);
-  console.log(parsed);
+  if (DEBUG) {
+    console.log('parsing');
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(wsMessage.event.data);
+  } catch (e) {
+    // pass
+  }
+  if (DEBUG) {
+    console.log(parsed);
+  }
   return parsed;
 }
 
@@ -94,8 +107,10 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
   let currClock = 0;
   let currArray: string[]|undefined;
   let cleanup = instrumentHsaction(root, call => {
-    console.log('sending');
-    console.log(call);
+    if (DEBUG) {
+      console.log('sending');
+      console.log(call);
+    }
     ws.send(JSON.stringify([call, currClock]));
   });
   try {
@@ -110,7 +125,11 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
           }
         } else {
           const rawMessage = nxt.value;
-          const [msg, clock] = parseWSMessage(rawMessage);
+          const mayParsedMessage = parseWSMessage(rawMessage)
+          if (!mayParsedMessage) {
+            continue;
+          }
+          const [msg, clock] = mayParsedMessage;
           currClock = clock;
           if (msg[0] === 'mount') {
             currArray = msg[1];
@@ -121,17 +140,17 @@ export async function attach(root: Element, wsUrl: string): Promise<WSClose> {
             currArray = applyPatch(currArray, msg[1]);
           }
           const toMorph = `${currArray.join('')}`;
-          // console.log(root);
-          console.log('morphing');
-          console.log(toMorph);
-          // console.log(root.innerHTML);
+          if (DEBUG) {
+            console.log('morphing');
+            console.log(toMorph);
+          }
           cleanup();
           morphdom(root, toMorph);
-          // console.log(root.innerHTML);
-          // root.innerHTML = toMorph;
           cleanup = instrumentHsaction(root, call => {
-            console.log('sending');
-            console.log(call);
+            if (DEBUG) {
+              console.log('sending');
+              console.log(call);
+            }
             ws.send(JSON.stringify([call, currClock]));
           });
         }
