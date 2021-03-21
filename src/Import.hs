@@ -7,6 +7,7 @@ module Import
     module Data.Maybe,
     -- module Data.Composition,
     -- module Data.Tuple.Extra,
+    txt,
   )
 where
 
@@ -17,6 +18,9 @@ import Data.Maybe
 import Data.String (IsString (..))
 import Data.Text
 import Data.Tuple.Extra
+import NeatInterpolation (trimming)
+
+txt = trimming
 
 tshow :: (Show a) => a -> Text
 tshow = pack . show

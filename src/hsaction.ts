@@ -103,6 +103,8 @@ function listenDebounced(node: Element,
 const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCallback[] = 
     (callback: CallConsumer) => (node: Element) => {
   const eventActionPairs = node.getAttribute('hsaction')!.split(';').map(s => s.split(':').map(st => st.trim()) as [string, string]);
+  const actionsToPreventDefault = new Set<string>((node.getAttribute('hsprevent') ?? "").split(';'));
+ 
   // console.log(eventActionPairs);
   const debounce: DebounceSpec|undefined = node.hasAttribute("hsdebounce") ? 
     parseDebounce(node.getAttribute("hsdebounce")!) : undefined;
@@ -113,7 +115,7 @@ const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCall
     let listener = (e: Event) => {
       const payload = {} as Record<string, string>;
       const mayValue = (node as HTMLInputElement).value;
-      if (mayValue) {
+      if (mayValue != null) {
         payload.value = String(mayValue);
       }
       let key: string|null = null;
@@ -125,11 +127,14 @@ const instrumentNode: (callback: CallConsumer) => (node: Element) => CleanupCall
         }
       }
       if (event === 'keyup' || event === 'keydown') {
-        if ((e as KeyboardEvent).key !== key) {
+        if (key && ((e as KeyboardEvent).key !== key)) {
           return;
         }
       }
       callback({action, payload});
+      if (actionsToPreventDefault.has(event)) {
+        e.preventDefault();
+      }
     };
     if (debounce) {
       cleanupCallbacks.push(...listenDebounced(node, event, debounce, listener));

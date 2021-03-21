@@ -91,7 +91,7 @@ var instrumentNode = (callback) => (node) => {
         }
       }
       if (event === "keyup" || event === "keydown") {
-        if (e.key !== key) {
+        if (key && e.key !== key) {
           return;
         }
       }

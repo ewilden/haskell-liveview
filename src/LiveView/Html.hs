@@ -104,9 +104,8 @@ hsaction_ = L.makeAttribute "hsaction" . buildHsactionText
 hsactions_ :: [Hsaction] -> L.Attribute
 hsactions_ = hsaction_ . mconcat
 
-makeHsaction :: (Monad m) => T.Text -> T.Text -> m Hsaction
-makeHsaction event action = do
-  return $ Hsaction $ singleton event action
+makeHsaction :: T.Text -> T.Text -> Hsaction
+makeHsaction event action = Hsaction $ singleton event action
 
 newtype LiveM r a = LiveM
   { runLiveM :: Reader r a
@@ -127,7 +126,20 @@ JS Interop	phx-hook
 
 -}
 
-hsValue :: Text -> Text -> L.Attribute
-hsValue attrName value = L.makeAttribute [trimming|hsvalue-$attrName|] value
+hsvalue_ :: Text -> Text -> L.Attribute
+hsvalue_ attrName value = L.makeAttribute [trimming|hsvalue-$attrName|] value
 
--- makeEventHandler :: 
+hskey_ :: Text -> L.Attribute
+hskey_ = L.makeAttribute "hskey"
+
+hsthrottle_ :: Rational -> L.Attribute
+hsthrottle_ = L.makeAttribute "hsthrottle" . tshow
+
+hsdebounce_ :: Rational -> L.Attribute
+hsdebounce_ = L.makeAttribute "hsdebounce" . tshow
+
+hsdebounceBlur_ :: L.Attribute
+hsdebounceBlur_ = L.makeAttribute "hsdebounce" "blur"
+
+hsprevent_ :: Text -> L.Attribute
+hsprevent_ = L.makeAttribute "hsprevent"
