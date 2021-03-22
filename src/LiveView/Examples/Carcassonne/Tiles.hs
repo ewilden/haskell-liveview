@@ -50,7 +50,7 @@ rotateCcw :: Tile -> Tile
 rotateCcw (Tile sides middle image) = Tile (drop 1 sides ++ take 1 sides) middle (rotateImageCcw image)
 
 rotateImageCcw :: TileImage -> TileImage 
-rotateImageCcw image = image & imageCcwRotates +~ 1
+rotateImageCcw image = image & imageCcwRotates %~ (\x -> (x + 1) `mod` 4)
 
 rotateCw :: Tile -> Tile
 rotateCw = rotateCcw . rotateCcw . rotateCcw
@@ -58,10 +58,10 @@ rotateCw = rotateCcw . rotateCcw . rotateCcw
 renderTileImage :: (MonadReader r m, HasAppContext r) => TileImage -> [Attribute] -> HtmlT m ()
 renderTileImage tileImage attrs = do
   genImageUrl <- asks (^. makeTileImageUrl)
-  img_ $ [src_ (genImageUrl tileImage)] ++ attrs
+  img_ $ [class_ "tile-image", src_ (genImageUrl tileImage)] ++ attrs
 
-renderTile :: (MonadReader r m, HasAppContext r) => Tile -> [Attribute] -> HtmlT m ()
-renderTile tile attrs = div_ ([class_ "tile"] ++ attrs) $ 
+renderTile :: (MonadReader r m, HasAppContext r) => Tile -> [Text] -> HtmlT m ()
+renderTile tile classes = div_ [classes_ $ "tile": classes] $ 
   renderTileImage (_image tile) []
 
 computeTileBounds :: Board -> Bounds
@@ -73,29 +73,34 @@ computeTileBounds = HM.foldlWithKey' f (Bounds 0 0 0 0) . _xyToTile
                             & boundsUp %~ max y
 
 tileSize :: Text
-tileSize = "160px"
+tileSize = "80px"
 
-renderBoard :: forall m r. (MonadReader r m, HasAppContext r) => Board -> HtmlT m ()
-renderBoard board = do
-  let (Bounds left right up down) = computeTileBounds board
+renderBoard :: forall m r. (MonadReader r m, HasAppContext r) => HtmlT m ()
+renderBoard = do
+  board' <- view (appContext . gameState . board)
+  let (Bounds left right up down) = computeTileBounds board'
       xStart = left - 1
       xEnd = right + 1
       yStart = down - 1
       yEnd = up + 1
+      numX = tshow $ xEnd - xStart + 1
+      numY = tshow $ yEnd - yStart + 1
       spotsToRender = (,) <$> [xStart .. xEnd] <*> [yStart .. yEnd]
       renderSpot :: (Int, Int) -> HtmlT m ()
-      renderSpot (x,y) = div_
-        [ style_ [txt|
-            grid-area: ${yEnd - y + 1} / ${x - xStart + 1} / ${yEnd - y + 2} / ${x - xStart + 2}|]
-        , class_ "spot"
-        ] $ div_ [class_ "tile"] $ case _xyToTile board ^. at (x,y) of
-              Nothing -> div_ 
-                [ style_ [txt| grid-area: center;|]
-                ] "Nothing"
-              Just tile -> renderTileImage (_image tile) []
+      renderSpot (x,y) = 
+        let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2] in
+        div_
+          [ style_ [txt|
+              grid-area: $y0 / $x0 / $y1 / $x1|]
+          , class_ "spot"
+          ] $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x,y) of
+                Nothing -> div_ 
+                  [ style_ [txt| grid-area: center;|]
+                  ] ""
+                Just tile -> renderTileImage (_image tile) []
   div_ [ class_ "board"
        , style_ [txt|
-          grid-template-columns: repeat(${xEnd - xStart + 1}, $tileSize);
-          grid-template-rows: repeat(${yEnd - yStart + 1}, $tileSize);
+          grid-template-columns: repeat($numX, $tileSize);
+          grid-template-rows: repeat($numY, $tileSize);
           |]] 
     $ mapM_ renderSpot spotsToRender

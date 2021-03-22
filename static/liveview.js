@@ -72,6 +72,7 @@ function listenDebounced(node, event, debounce, callback) {
 }
 var instrumentNode = (callback) => (node) => {
   const eventActionPairs = node.getAttribute("hsaction").split(";").map((s) => s.split(":").map((st) => st.trim()));
+  const actionsToPreventDefault = new Set((node.getAttribute("hsprevent") ?? "").split(";"));
   const debounce = node.hasAttribute("hsdebounce") ? parseDebounce(node.getAttribute("hsdebounce")) : void 0;
   const throttle = node.hasAttribute("hsthrottle") ? +node.getAttribute("hsthrottle") : void 0;
   const cleanupCallbacks = [];
@@ -79,7 +80,7 @@ var instrumentNode = (callback) => (node) => {
     let listener = (e) => {
       const payload = {};
       const mayValue = node.value;
-      if (mayValue) {
+      if (mayValue != null) {
         payload.value = String(mayValue);
       }
       let key = null;
@@ -96,6 +97,9 @@ var instrumentNode = (callback) => (node) => {
         }
       }
       callback({action, payload});
+      if (actionsToPreventDefault.has(event)) {
+        e.preventDefault();
+      }
     };
     if (debounce) {
       cleanupCallbacks.push(...listenDebounced(node, event, debounce, listener));

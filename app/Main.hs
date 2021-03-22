@@ -2,7 +2,7 @@
 
 module Main where
 
-import LiveView.Examples.Calculator qualified as Calc (main)
+import LiveView.Examples.Carcassonne qualified as App (main)
 
 main :: IO ()
-main = Calc.main
+main = App.main

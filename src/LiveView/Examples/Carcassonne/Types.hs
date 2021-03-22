@@ -44,6 +44,7 @@ makeClassy ''Bounds
 
 data GameState = GameState
   { _gameBoard :: Board
+  , _gameTiles :: [Tile]
   }
 
 makeClassy ''GameState
@@ -51,11 +52,15 @@ makeClassy ''GameState
 instance HasBoard GameState where
   board = gameBoard
 
-newtype AppContext = AppContext
+data AppContext = AppContext
   { _makeTileImageUrl :: TileImage -> Text
+  , _acGameState :: GameState
   }
 
 makeClassy ''AppContext
+
+instance HasGameState AppContext where
+  gameState = acGameState
 
 
 
