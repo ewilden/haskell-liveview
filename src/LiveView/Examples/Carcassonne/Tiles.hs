@@ -4,13 +4,18 @@
 module LiveView.Examples.Carcassonne.Tiles where
 
 import Control.Lens
+import Control.Monad.Random.Strict
 import Control.Monad.Reader
+import Control.Monad.State
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
+import Data.List
 import Data.Text ( Text )
 import LiveView.Examples.Carcassonne.Types
 import Lucid
 import Import
+import System.Random
+import System.Random.Stateful
 
 ts :: Text -> [SideTerrain] -> MiddleTerrain -> Int -> (Tile, Int)
 ts t sides middle frequency = (Tile sides middle (TileImage t 0), frequency)
@@ -42,6 +47,16 @@ tileSpecs =
   , ts "RFRF" [ Road, Field, Road, Field ] MField 8
   , ts "FFRR" [ Field, Field, Road, Road ] MField 9
   ]
+
+shuffle :: (MonadRandom m) => [a] -> m [a]
+shuffle ls = do
+  (fs :: [Float]) <- mapM (const $ getRandomR (0, 1)) ls
+  pure $ snd <$> sortOn fst (zip fs ls)
+
+unshuffledTiles :: [Tile]
+unshuffledTiles = do
+  (tile, n) <- tileSpecs
+  replicate n tile
 
 startingTile :: Tile
 startingTile = Tile [City, Road, Field, Road] MField (TileImage "CRFR" 0)

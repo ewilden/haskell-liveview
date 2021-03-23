@@ -35,8 +35,10 @@ dependencies:
 - lens
 - lens-aeson
 - lucid >= 2.9.11 && < 3
+- MonadRandom
 - mtl >= 2.2.2 && < 3
 - neat-interpolation
+- random
 - servant
 - servant-lucid
 - servant-server

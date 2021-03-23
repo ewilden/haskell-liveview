@@ -5,6 +5,13 @@
 
 packages:
 - completed:
+    hackage: random-1.2.0@sha256:5ca8674e95c46c7eb90f520c26aea22d403625c97697275434afba66ebd32b05,5897
+    pantry-tree:
+      size: 1259
+      sha256: 8ba46c3d6b1cd0d4a4ee472922497f8d0778a1aaf7bbcac328a0b06b4d153309
+  original:
+    hackage: random-1.2.0
+- completed:
     hackage: servant-lucid-0.9.0.1@sha256:17b634fd41c8e14158bbcab5bed6aa7291832396495b3e271a8379dbdbf07e85,1789
     pantry-tree:
       size: 392

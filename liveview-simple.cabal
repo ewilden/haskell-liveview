@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a65b07b1f20f301a13e7c070a724fc317adb9df8aef61e2defa5b0716e7a7ad3
+-- hash: 6041021645e05da9154a111607091f3e009a3c663c9100b4335d5e491d6d0924
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -44,6 +44,7 @@ library
   default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
   build-depends:
       Diff >=0.3.4 && <1
+    , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
     , async
@@ -58,6 +59,7 @@ library
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , random
     , servant
     , servant-lucid
     , servant-server
@@ -82,6 +84,7 @@ executable liveview-simple-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
+    , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
     , async
@@ -97,6 +100,7 @@ executable liveview-simple-exe
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , random
     , servant
     , servant-lucid
     , servant-server
@@ -122,6 +126,7 @@ test-suite liveview-simple-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
+    , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
     , async
@@ -137,6 +142,7 @@ test-suite liveview-simple-test
     , lucid >=2.9.11 && <3
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , random
     , servant
     , servant-lucid
     , servant-server

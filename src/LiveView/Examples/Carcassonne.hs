@@ -80,9 +80,11 @@ server :: Server API
 server = serveLiveViewServant (do
             let getHtml ac = flip runReader ac $ commuteHtmlT sampleLiveView
             htmlChan <- liftIO STM.newTChanIO
-            appContextTVar <- liftIO $ STM.newTVarIO sampleAppContext
+            initialTiles <- liftIO $ shuffle unshuffledTiles
+            let initialAppContext = sampleAppContext & gameTiles .~ initialTiles
+            appContextTVar <- liftIO $ STM.newTVarIO initialAppContext
             pure $ ServantDeps 
-              (getHtml sampleAppContext) 
+              (getHtml initialAppContext) 
               (S.repeatM (atomically $ STM.readTChan htmlChan)) 
               (S.mapM_ $ \action -> do
                 STM.atomically $ do
