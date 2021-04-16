@@ -27,6 +27,8 @@ import Servant.API.WebSocket
 import Servant.HTML.Lucid
 import Streaming
 import Streaming.Prelude qualified as S
+import Streamly qualified as SY
+import Streamly.Prelude qualified as SY
 
 type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 

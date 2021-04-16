@@ -21,6 +21,8 @@ import LiveView.Html
 import Lucid qualified as L
 import Streaming
 import qualified Streaming.Prelude as S
+import Streamly qualified as SY
+import Streamly.Prelude qualified as SY
 
 
 newtype Clock = Clock {
@@ -34,6 +36,18 @@ data ActionCall = ActionCall
   } deriving Show
 
 deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
+
+fromStreaming :: (SY.IsStream t, SY.MonadAsync m) => Stream (Of a) m r -> t m a
+fromStreaming = SY.unfoldrM S.uncons
+
+toStreaming :: Monad m => SY.SerialT m a -> Stream (Of a) m ()
+toStreaming = S.unfoldr unconsS
+    where
+    -- Adapt S.uncons to return an Either instead of Maybe
+    unconsS s = SY.uncons s >>= maybe (return $ Left ()) (return . Right)
+
+mergePar :: (SY.MonadAsync m) => Stream (Of a) m () -> Stream (Of a) m () -> Stream (Of a) m ()
+mergePar a b = toStreaming $ SY.parallely $ (fromStreaming a) <> (fromStreaming b)
 
 data DepInput = DepHtml (L.Html ()) | DepMessage BL.ByteString
 

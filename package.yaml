@@ -45,6 +45,7 @@ dependencies:
 - servant-websockets
 - stm
 - streaming
+- streamly
 - text >= 1.2.3.1 && < 2
 - unliftio
 - unordered-containers >= 0.2.13.0 && < 1
