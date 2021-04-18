@@ -83,16 +83,13 @@ serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
       (ServantDeps initHtml htmls actionsCallback mayBasePage rootId) <- getDeps
       let rootWrapper x = div_ [id_ rootId] x
       liftIO $ putStrLn "liveRenderEndpoint"
-      inpChan <- liftIO STM.newTChanIO
-      let writeHtmlsToInpChan = S.mapM_ (atomically . STM.writeTChan inpChan . DepHtml . rootWrapper) htmls
-          writeMessagesToInpChan = withPingThread conn 30 (pure ()) $ forever $ do
-            rawMsg <- WS.receiveData conn
-            atomically $ STM.writeTChan inpChan $ DepMessage rawMsg
-      liftIO $ Async.race_ writeHtmlsToInpChan
-        $ Async.race_ writeMessagesToInpChan
+      let
+          rawMsgs = S.repeatM (WS.receiveData conn)
+          inpStream = mergePar (S.map (DepHtml . rootWrapper) htmls) (S.map DepMessage rawMsgs)
+      liftIO $ withPingThread conn 30 (putStrLn "ping")
         $ actionsCallback $ serveLV $ LiveViewDeps
             { _lvdInitialHtml = rootWrapper initHtml
-            , _lvdInputStream = S.repeatM (atomically $ STM.readTChan inpChan)
+            , _lvdInputStream = inpStream
             , _lvdSendSocketMessage = WS.sendTextData conn
             , _lvdDebugPrint = putStrLn
             }

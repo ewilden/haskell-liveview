@@ -2,7 +2,7 @@ import {instrumentHsaction} from './hsaction';
 import morphdom from 'morphdom';
 import { Repeater, Push, Stop } from "@repeaterjs/repeater";
 
-const DEBUG: boolean = true;
+const DEBUG: boolean = false;
 
 interface WSMessage {
   type: "message";
