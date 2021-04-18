@@ -3,6 +3,9 @@
 
 module LiveView.Serving where
 
+import Control.Concurrent.Async qualified as Async
+import Control.Concurrent.STM qualified as STM
+import Control.Concurrent.STM (atomically)
 import Control.Lens
 import Control.Lens qualified as L
 import Control.Monad.Reader
@@ -46,8 +49,30 @@ toStreaming = S.unfoldr unconsS
     -- Adapt S.uncons to return an Either instead of Maybe
     unconsS s = SY.uncons s >>= maybe (return $ Left ()) (return . Right)
 
-mergePar :: (SY.MonadAsync m) => Stream (Of a) m () -> Stream (Of a) m () -> Stream (Of a) m ()
-mergePar a b = toStreaming $ SY.parallely $ (fromStreaming a) <> (fromStreaming b)
+mergePar :: Stream (Of a) IO () -> Stream (Of a) IO () -> (Stream (Of a) IO ())
+mergePar a b =
+  -- toStreaming $ SY.parallely $ (fromStreaming a) <> (fromStreaming b)
+  do
+    chan <- liftIO STM.newTChanIO
+    let writeThread stream = S.mapM_ (atomically . STM.writeTChan chan . Just) stream >> (atomically (STM.writeTChan chan Nothing))
+    a' <- liftIO $ Async.async (writeThread a)
+    b' <- liftIO $ Async.async (writeThread b)
+    liftIO $ Async.link a'
+    liftIO $ Async.link b'
+    let go = do
+          a'' <- liftIO $ Async.poll a'
+          b'' <- liftIO $ Async.poll b'
+          case (a'', b'') of
+            (Just _, _) -> liftIO $ void $ Async.waitEither a' b'
+            (_, Just _) -> liftIO $ void $ Async.waitEither a' b'
+            (Nothing, Nothing) -> do
+              el <- liftIO $ atomically $ STM.readTChan chan
+              case el of
+                Nothing -> pure ()
+                Just x -> S.yield x
+              go
+    go
+
 
 data DepInput = DepHtml (L.Html ()) | DepMessage BL.ByteString
 

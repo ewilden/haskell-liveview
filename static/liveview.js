@@ -1641,7 +1641,7 @@ function latest(contenders) {
 }
 
 // src/live_view.ts
-var DEBUG = false;
+var DEBUG = true;
 function mkHandle(url) {
   const webSocket = new WebSocket(url);
   const messages = new Repeater(async (push2, stop2) => {
