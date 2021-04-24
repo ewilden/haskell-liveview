@@ -24,8 +24,6 @@ import LiveView.Html
 import Lucid qualified as L
 import Streaming
 import qualified Streaming.Prelude as S
-import Streamly qualified as SY
-import Streamly.Prelude qualified as SY
 
 
 newtype Clock = Clock {
@@ -38,23 +36,13 @@ data ActionCall = ActionCall
     _payload :: HashMap T.Text T.Text
   } deriving Show
 
-deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1}) ''ActionCall
+deriveFromJSON (defaultOptions { fieldLabelModifier = drop 1 }) ''ActionCall
 
-fromStreaming :: (SY.IsStream t, SY.MonadAsync m) => Stream (Of a) m r -> t m a
-fromStreaming = SY.unfoldrM S.uncons
-
-toStreaming :: Monad m => SY.SerialT m a -> Stream (Of a) m ()
-toStreaming = S.unfoldr unconsS
-    where
-    -- Adapt S.uncons to return an Either instead of Maybe
-    unconsS s = SY.uncons s >>= maybe (return $ Left ()) (return . Right)
-
-mergePar :: Stream (Of a) IO () -> Stream (Of a) IO () -> (Stream (Of a) IO ())
-mergePar a b =
-  -- toStreaming $ SY.parallely $ (fromStreaming a) <> (fromStreaming b)
-  do
+mergePar :: Stream (Of a) IO () -> Stream (Of a) IO () -> Stream (Of a) IO ()
+mergePar a b = do
     chan <- liftIO STM.newTChanIO
-    let writeThread stream = S.mapM_ (atomically . STM.writeTChan chan . Just) stream >> (atomically (STM.writeTChan chan Nothing))
+    let writeThread stream = S.mapM_ (atomically . STM.writeTChan chan . Just)
+                                stream >> atomically (STM.writeTChan chan Nothing)
     a' <- liftIO $ Async.async (writeThread a)
     b' <- liftIO $ Async.async (writeThread b)
     liftIO $ Async.link a'
@@ -73,7 +61,6 @@ mergePar a b =
               go
     go
 
-
 data DepInput = DepHtml (L.Html ()) | DepMessage BL.ByteString
 
 data LiveViewDeps r m = LiveViewDeps
@@ -84,12 +71,8 @@ data LiveViewDeps r m = LiveViewDeps
   }
 
 commuteState :: (Monad m) => s -> Stream (Of a) (StateT s m) r -> Stream (Of a) m (r, s)
-commuteState s stream = S.unfoldr unfoldFn (s, stream)
-  where unfoldFn (currState, stream) = do
-          (eithNextResult, nextState) <- runStateT (S.next stream) currState
-          case eithNextResult of
-            Left r -> pure $ Left (r, nextState)
-            Right (a, stream') -> pure $ Right (a, (nextState, stream'))
+commuteState s stream =
+  runStateT (distribute stream) s
 
 serveLV :: forall r m. (Monad m) => LiveViewDeps r m -> Stream (Of ActionCall) m ()
 serveLV deps = do

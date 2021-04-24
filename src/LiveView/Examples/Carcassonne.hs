@@ -43,6 +43,9 @@ sampleReducer :: ActionCall -> AppContext -> AppContext
 sampleReducer actionCall appContext
   | _action actionCall == "rotate_currTile_left" = appContext & gameTiles . ix 0 %~ rotateCcw
   | _action actionCall == "rotate_currTile_right" = appContext & gameTiles . ix 0 %~ rotateCw
+  | _action actionCall == "place_currTile" =
+      let currTile = appContext ^?! gameTiles . ix 0 in
+        undefined
   | otherwise = appContext
 
 sampleLiveView :: HtmlT (Reader AppContext) ()

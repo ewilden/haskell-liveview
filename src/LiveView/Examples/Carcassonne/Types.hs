@@ -1,3 +1,4 @@
+{-# LANGUAGE FunctionalDependencies#-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -12,18 +13,33 @@ data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
 
 data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
 
+data LRUD a = LRUD
+  { _lrudL :: a
+  , _lrudR :: a
+  , _lrudU :: a
+  , _lrudD :: a
+  } deriving (Functor, Foldable, Traversable, Show)
+
+makeClassy ''LRUD
+
+from4Tuple :: (a,a,a,a) -> LRUD a
+from4Tuple (a,b,c,d) = LRUD a b c d
+
+from4List :: [a] -> LRUD a
+from4List [l, r, u, d] = LRUD l r u d
+
 data TileImage = TileImage 
   { _imageName :: Text
   , _imageCcwRotates :: Int
-  }
+  } deriving Show
 
 makeClassy ''TileImage
 
 data Tile = Tile
-  { _sides :: [SideTerrain]
+  { _sides :: LRUD SideTerrain
   , _middle :: MiddleTerrain
   , _image :: TileImage
-  }
+  } deriving Show
 
 makeClassy ''Tile
 
@@ -32,15 +48,6 @@ newtype Board = Board
   }
 
 makeClassy ''Board
-
-data Bounds = Bounds
-  { _boundsLeft :: Int
-  , _boundsRight :: Int
-  , _boundsUp :: Int
-  , _boundsDown :: Int
-  }
-
-makeClassy ''Bounds
 
 data GameState = GameState
   { _gameBoard :: Board
