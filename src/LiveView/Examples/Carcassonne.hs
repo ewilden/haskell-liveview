@@ -44,8 +44,14 @@ sampleReducer actionCall appContext
   | _action actionCall == "rotate_currTile_left" = appContext & gameTiles . ix 0 %~ rotateCcw
   | _action actionCall == "rotate_currTile_right" = appContext & gameTiles . ix 0 %~ rotateCw
   | _action actionCall == "place_currTile" =
-      let currTile = appContext ^?! gameTiles . ix 0 in
-        undefined
+      let currTile = appContext ^?! gameTiles . ix 0
+          rawX = _payload actionCall ^?! ix "x"
+          rawY = _payload actionCall ^?! ix "y"
+          x = read (T.unpack rawX)
+          y = read (T.unpack rawY)
+      in
+        appContext & gameTiles %~ drop 1
+        & gameBoard . xyToTile . at (x, y) .~ Just currTile
   | otherwise = appContext
 
 sampleLiveView :: HtmlT (Reader AppContext) ()

@@ -101,8 +101,9 @@ computeTileBounds = HM.foldlWithKey' f (LRUD 0 0 0 0) . _xyToTile
 tileSize :: Text
 tileSize = "80px"
 
-(?||) :: ([Attribute] -> b) -> [Maybe Attribute] -> b
-f ?|| as = f (catMaybes as)
+
+(?||) :: ([Attribute] -> b) -> [[Attribute]] -> b
+f ?|| as = f (as >>= id)
 
 infixr 2 ?||
 
@@ -155,19 +156,21 @@ renderBoard = do
           , class_ "spot"
           ] $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x,y) of
                 Nothing ->
-                  let mayPlaceTileAttr = mayCurrTile >>=
+                  let mayPlaceTileAttrs = maybeToList mayCurrTile >>=
                         (\t ->
                            if canPlace t (neighborhood loc)
-                           then Just (hsaction_ (makeHsaction "click" "place_currTile"))
-                           else Nothing)
+                           then [ (hsaction_ (makeHsaction "click" "place_currTile"))
+                                , hsvalue_ "x" (tshow x)
+                                , hsvalue_ "y" (tshow y)
+                                ]
+                           else [])
+                      canPlaceTileClass = maybe "cant-place" (const "can-place") $ mayPlaceTileAttrs ^? ix 0
                   in
                   div_ ?||
-                    [ Just $ style_ [txt| grid-area: center; width: 100%; height: 100%;|]
-                        , mayPlaceTileAttr
-                        ] $
-                      case mayPlaceTileAttr of
-                        Nothing -> div_ [style_ [txt| background-color: red; width: 100%; height: 100%;|]] ""
-                        Just _ -> div_ [style_ [txt| background-color: green; width: 100%; height: 100%;|]] ""
+                    [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|]
+                        , mayPlaceTileAttrs
+                        , pure $ class_ canPlaceTileClass
+                        ] $ ""
                       -- (fromString $ show (neighborhood loc))
                 Just tile -> renderTileImage (_image tile) []
   div_ [ class_ "board"
