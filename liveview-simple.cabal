@@ -1,0 +1,161 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 47469e39c1158449ef26fa22feeaa5905890c51f739163ef7fc9d79973d621d2
+
+name:           liveview-simple
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/ewilden/liveview-simple#readme>
+homepage:       https://github.com/ewilden/liveview-simple#readme
+bug-reports:    https://github.com/ewilden/liveview-simple/issues
+author:         Evan Wildenhain
+maintainer:     evan.wildenhain@gmail.com
+copyright:      2021 Evan Wildenhain
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/ewilden/liveview-simple
+
+library
+  exposed-modules:
+      Import
+      Lib
+      LiveView.Examples.Calculator
+      LiveView.Examples.Carcassonne
+      LiveView.Examples.Carcassonne.Tiles
+      LiveView.Examples.Carcassonne.Types
+      LiveView.Fixtures
+      LiveView.Html
+      LiveView.Serving
+      LiveView.Serving.Servant
+  other-modules:
+      Paths_liveview_simple
+  hs-source-dirs:
+      src
+  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  build-depends:
+      Diff >=0.3.4 && <1
+    , MonadRandom
+    , aeson >=1.5.5.1 && <2
+    , aeson-qq >=0.8.3 && <1
+    , async
+    , base >=4.7 && <5
+    , bytestring
+    , composition >=1.0.2.1 && <2
+    , extra >=1.6.17 && <2
+    , hashable >=1.3.0.0 && <2
+    , hedgehog >=1.0.4 && <2
+    , lens
+    , lens-aeson
+    , lucid >=2.9.11 && <3
+    , mtl >=2.2.2 && <3
+    , neat-interpolation
+    , random
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
+    , streaming
+    , streamly
+    , text >=1.2.3.1 && <2
+    , unliftio
+    , unordered-containers >=0.2.13.0 && <1
+    , vector >=0.12.1.2 && <1
+    , warp
+    , websockets
+  default-language: Haskell2010
+
+executable liveview-simple-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_liveview_simple
+  hs-source-dirs:
+      app
+  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Diff >=0.3.4 && <1
+    , MonadRandom
+    , aeson >=1.5.5.1 && <2
+    , aeson-qq >=0.8.3 && <1
+    , async
+    , base >=4.7 && <5
+    , bytestring
+    , composition >=1.0.2.1 && <2
+    , extra >=1.6.17 && <2
+    , hashable >=1.3.0.0 && <2
+    , hedgehog >=1.0.4 && <2
+    , lens
+    , lens-aeson
+    , liveview-simple
+    , lucid >=2.9.11 && <3
+    , mtl >=2.2.2 && <3
+    , neat-interpolation
+    , random
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
+    , streaming
+    , streamly
+    , text >=1.2.3.1 && <2
+    , unliftio
+    , unordered-containers >=0.2.13.0 && <1
+    , vector >=0.12.1.2 && <1
+    , warp
+    , websockets
+  default-language: Haskell2010
+
+test-suite liveview-simple-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_liveview_simple
+  hs-source-dirs:
+      test
+  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      Diff >=0.3.4 && <1
+    , MonadRandom
+    , aeson >=1.5.5.1 && <2
+    , aeson-qq >=0.8.3 && <1
+    , async
+    , base >=4.7 && <5
+    , bytestring
+    , composition >=1.0.2.1 && <2
+    , extra >=1.6.17 && <2
+    , hashable >=1.3.0.0 && <2
+    , hedgehog >=1.0.4 && <2
+    , lens
+    , lens-aeson
+    , liveview-simple
+    , lucid >=2.9.11 && <3
+    , mtl >=2.2.2 && <3
+    , neat-interpolation
+    , random
+    , servant
+    , servant-lucid
+    , servant-server
+    , servant-websockets
+    , stm
+    , streaming
+    , streamly
+    , text >=1.2.3.1 && <2
+    , unliftio
+    , unordered-containers >=0.2.13.0 && <1
+    , vector >=0.12.1.2 && <1
+    , warp
+    , websockets
+  default-language: Haskell2010

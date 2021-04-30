@@ -1,0 +1,52 @@
+.board {
+  display: grid;
+}
+
+.spot {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.tile {
+  display: flex;
+  justify-content: center;
+  justify-items: center;
+  align-content: center;
+  align-items: center;
+  flex: 1 1;
+}
+
+.tile:hover {
+  /* background-color: var(--tile-hl-color); */
+  background-image: var(--curr-tile-img);
+  background-size: contain;
+  cursor: pointer;
+}
+
+.current-turn {
+  position: fixed;
+  right: 10vw;
+  bottom: 10vw;
+  box-shadow: 0 0 15px black;
+  display: flex;
+  flex-direction: column;
+}
+
+.current-tile {
+  height: var(--tile-size);
+  width: var(--tile-size);
+}
+
+.tile-image {
+  height: 100%;
+  width: 100%;
+}
+
+.can-place:hover {
+background-color: rgba(0, 255, 0, 0.4);
+}
+
+.cant-place:hover {
+background-color: rgba(255, 0, 0, 0.4);
+}
