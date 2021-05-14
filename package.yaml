@@ -1,10 +1,10 @@
 name:                liveview-simple
 version:             0.1.0.0
 github:              "ewilden/liveview-simple"
-license:             BSD3
+license:             Apache
 author:              "Evan Wildenhain"
 maintainer:          "evan.wildenhain@gmail.com"
-copyright:           "2021 Evan Wildenhain"
+copyright:           "2021 Google LLC"
 
 extra-source-files:
 - README.md

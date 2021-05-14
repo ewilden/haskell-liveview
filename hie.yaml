@@ -1,0 +1,16 @@
+cradle:
+    multi:
+        - path: "./Setup.hs"
+          config:
+            cradle:
+                none:
+        - path: "./"
+          config:
+            cradle:
+                stack:
+                    - path: "./app"
+                      component: "liveview-simple:exe:liveview-simple-exe"
+                    - path: "./src"
+                      component: "liveview-simple:lib"
+                    - path: "./test"
+                      component: "liveview-simple:test:liveview-simple-test"

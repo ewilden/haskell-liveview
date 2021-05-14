@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 45b2cfce9de933cca362517b99e1b521c9df7e35f7a608b750cea2040497633b
+-- hash: b0625c812f65543d5f7405de466d188ce02290b683d51dbb1a5182d8eea0acd1
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -13,8 +13,8 @@ homepage:       https://github.com/ewilden/liveview-simple#readme
 bug-reports:    https://github.com/ewilden/liveview-simple/issues
 author:         Evan Wildenhain
 maintainer:     evan.wildenhain@gmail.com
-copyright:      2021 Evan Wildenhain
-license:        BSD3
+copyright:      2021 Google LLC
+license:        Apache
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -41,7 +41,46 @@ library
       Paths_liveview_simple
   hs-source-dirs:
       src
-  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  default-extensions:
+      EmptyCase
+      PostfixOperators
+      TupleSections
+      ImportQualifiedPost
+      NamedFieldPuns
+      BangPatterns
+      BinaryLiterals
+      HexFloatLiterals
+      NumericUnderscores
+      GADTSyntax
+      RankNTypes
+      TypeApplications
+      PolyKinds
+      StandaloneKindSignatures
+      ExistentialQuantification
+      TypeOperators
+      ConstraintKinds
+      ExplicitForAll
+      KindSignatures
+      NamedWildCards
+      ScopedTypeVariables
+      FlexibleContexts
+      FlexibleInstances
+      MultiParamTypeClasses
+      ConstrainedClassMethods
+      InstanceSigs
+      TypeSynonymInstances
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveTraversable
+      StandaloneDeriving
+      EmptyDataDeriving
+      DeriveLift
+      GeneralisedNewtypeDeriving
+      DeriveGeneric
+      LambdaCase
+      NamedFieldPuns
+      TupleSections
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
@@ -84,7 +123,46 @@ executable liveview-simple-exe
       Paths_liveview_simple
   hs-source-dirs:
       app
-  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  default-extensions:
+      EmptyCase
+      PostfixOperators
+      TupleSections
+      ImportQualifiedPost
+      NamedFieldPuns
+      BangPatterns
+      BinaryLiterals
+      HexFloatLiterals
+      NumericUnderscores
+      GADTSyntax
+      RankNTypes
+      TypeApplications
+      PolyKinds
+      StandaloneKindSignatures
+      ExistentialQuantification
+      TypeOperators
+      ConstraintKinds
+      ExplicitForAll
+      KindSignatures
+      NamedWildCards
+      ScopedTypeVariables
+      FlexibleContexts
+      FlexibleInstances
+      MultiParamTypeClasses
+      ConstrainedClassMethods
+      InstanceSigs
+      TypeSynonymInstances
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveTraversable
+      StandaloneDeriving
+      EmptyDataDeriving
+      DeriveLift
+      GeneralisedNewtypeDeriving
+      DeriveGeneric
+      LambdaCase
+      NamedFieldPuns
+      TupleSections
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
@@ -130,7 +208,46 @@ test-suite liveview-simple-test
       Paths_liveview_simple
   hs-source-dirs:
       test
-  default-extensions: EmptyCase PostfixOperators TupleSections ImportQualifiedPost NamedFieldPuns BangPatterns BinaryLiterals HexFloatLiterals NumericUnderscores GADTSyntax RankNTypes TypeApplications PolyKinds StandaloneKindSignatures ExistentialQuantification TypeOperators ConstraintKinds ExplicitForAll KindSignatures NamedWildCards ScopedTypeVariables FlexibleContexts FlexibleInstances MultiParamTypeClasses ConstrainedClassMethods InstanceSigs TypeSynonymInstances DeriveDataTypeable DeriveFoldable DeriveFunctor DeriveTraversable StandaloneDeriving EmptyDataDeriving DeriveLift GeneralisedNewtypeDeriving DeriveGeneric LambdaCase NamedFieldPuns TupleSections
+  default-extensions:
+      EmptyCase
+      PostfixOperators
+      TupleSections
+      ImportQualifiedPost
+      NamedFieldPuns
+      BangPatterns
+      BinaryLiterals
+      HexFloatLiterals
+      NumericUnderscores
+      GADTSyntax
+      RankNTypes
+      TypeApplications
+      PolyKinds
+      StandaloneKindSignatures
+      ExistentialQuantification
+      TypeOperators
+      ConstraintKinds
+      ExplicitForAll
+      KindSignatures
+      NamedWildCards
+      ScopedTypeVariables
+      FlexibleContexts
+      FlexibleInstances
+      MultiParamTypeClasses
+      ConstrainedClassMethods
+      InstanceSigs
+      TypeSynonymInstances
+      DeriveDataTypeable
+      DeriveFoldable
+      DeriveFunctor
+      DeriveTraversable
+      StandaloneDeriving
+      EmptyDataDeriving
+      DeriveLift
+      GeneralisedNewtypeDeriving
+      DeriveGeneric
+      LambdaCase
+      NamedFieldPuns
+      TupleSections
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
