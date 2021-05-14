@@ -32,9 +32,13 @@ import Streamly.Prelude qualified as SY
 
 type LiveViewApi = Get '[HTML] (Html ()) :<|> "liveview" :> WebSocket
 
+data WssUrlSpec
+  = Ws
+  | Wss
+
 data ScriptData = ScriptData 
   { _liveViewScriptAbsolutePath :: T.Text
-  , _wssUrl :: T.Text
+  , _wssUrlSpec :: WssUrlSpec
   }
 
 data BasePageSpec 
@@ -52,8 +56,9 @@ data ServantDeps = ServantDeps
   }
 
 defaultBasePage :: T.Text -> ScriptData -> Html () -> Html ()
-defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrl) liveContent = do
+defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrlSpec) liveContent = do
    doctypehtml_ $ do
+    let scheme = (\case Ws -> "ws:"; Wss -> "wss:") wssUrlSpec
     head_ $ title_ "haskell liveview-simple"
     body_ liveContent
     script_ [type_ "module"] [trimming|
@@ -61,7 +66,10 @@ defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrl) liveConten
         (async () => {
           while (true) {
             try {
-              await attach(document.getElementById("$rootId"), "$wssUrl");
+              const currUrl = new URL(location.href);
+              currUrl.protocol = "$scheme";
+              currUrl.pathname = currUrl.pathname + '/liveview';
+              await attach(document.getElementById("$rootId"), currUrl);
             } catch (e) {
               // pass
             }

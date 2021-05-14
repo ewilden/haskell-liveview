@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
@@ -14,8 +15,10 @@ import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.String (fromString)
 import Data.Text qualified as T
+import Focus qualified
 import Import
 import Lib
+import ListT qualified
 import LiveView.Html
 import LiveView.Serving
 import LiveView.Serving.Servant
@@ -25,6 +28,7 @@ import Lucid
 import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
+import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
@@ -37,6 +41,7 @@ sampleAppContext = AppContext
             _ -> let r = tshow ccwRotates in "-" <> r
       in [txt|/tiles/${name}50${suffix}.jpg|]
   , _acGameState = GameState (Board (HM.singleton (0, 0) startingTile)) (fst <$> tileSpecs)
+  , _sessionId = "sampleAppContext"
   }
 
 sampleReducer :: ActionCall -> AppContext -> AppContext
@@ -80,13 +85,48 @@ sampleLiveView = do
         button_ [hsaction_(makeHsaction "click" "rotate_currTile_right")] "rotate right"
 
 
-type API = LiveViewApi :<|> Raw
+type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) :<|> Raw
 
 api :: Proxy API
 api = Proxy
 
-server :: Server API
-server = serveLiveViewServant (do
+initServerContext :: (MonadIO m) => m ServerContext
+initServerContext = do
+  sessMap <- liftIO StmMap.newIO
+  pure (ServerContext sessMap)
+
+initAppContext :: (MonadIO m) => m AppContext
+initAppContext = do
+  initialTiles <- liftIO $ shuffle unshuffledTiles
+  pure $ sampleAppContext & gameTiles .~ initialTiles
+
+getSession :: (MonadIO m) => ServerContext -> T.Text -> m AppContext
+getSession servCtxt sessId = liftIO $ do
+  let sid = SessionId sessId
+  freshAppCtxt <- initAppContext
+  STM.atomically $ do
+    mayAppCtxt <- StmMap.lookup sid (_sessionMap servCtxt)
+    case mayAppCtxt of
+      Nothing -> do
+        StmMap.insert freshAppCtxt sid (_sessionMap servCtxt)
+        pure freshAppCtxt
+      Just ac -> pure ac
+
+subscribeSession :: ServerContext -> T.Text -> Stream (Of AppContext) IO ()
+subscribeSession servCtxt sessId = do
+  let sid = SessionId sessId
+  freshAppCtxt <- initAppContext
+  liftIO $ STM.atomically $ do
+    mayAppCtxt <- StmMap.lookup sid (_sessionMap servCtxt)
+    case mayAppCtxt of
+      Nothing -> do
+        StmMap.insert freshAppCtxt sid (_sessionMap servCtxt)
+        pure ()
+      Just _ -> pure ()
+  undefined
+
+server :: ServerContext -> Server API
+server servCtxt = (\sessId -> serveLiveViewServant (do
             let getHtml ac = flip runReader ac $ commuteHtmlT sampleLiveView
             htmlChan <- liftIO STM.newTChanIO
             initialTiles <- liftIO $ shuffle unshuffledTiles
@@ -104,10 +144,12 @@ server = serveLiveViewServant (do
                 ) 
               (DefaultBasePage $ ScriptData 
                 { _liveViewScriptAbsolutePath = "/liveview.js"
-                , _wssUrl = "ws://localhost:5000/liveview"
+                , _wssUrlSpec = Ws
                 })
               "lvroot"
-          ) :<|> serveDirectoryWebApp "static"
+          )) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
-main = Warp.run 5000 (serve api server)
+main = do
+  servCtxt <- initServerContext
+  Warp.run 5000 (serve api (server servCtxt))

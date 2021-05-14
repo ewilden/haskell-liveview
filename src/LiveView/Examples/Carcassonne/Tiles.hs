@@ -70,7 +70,7 @@ unshuffledTiles = do
   replicate n tile
 
 startingTile :: Tile
-startingTile = Tile (from4List [Road, Road, City, Field]) MField (TileImage "CRFR" 0)
+startingTile = Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0)
 
 rotateCcw :: Tile -> Tile
 rotateCcw (Tile (LRUD l r u d) middle image) = Tile (LRUD u d r l) middle (rotateImageCcw image)

@@ -97,3 +97,8 @@ serveLV deps = do
               lift $ lift $ _lvdDebugPrint deps "yield call"
               S.yield call
   void $ commuteState (initHtml, Clock 0) actionCallStatefulStream
+
+
+makeActionCallConsumer :: Hsaction -> ActionCall -> IO ()
+makeActionCallConsumer hsaction actionCall =
+  undefined

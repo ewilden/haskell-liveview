@@ -78,7 +78,7 @@ server = serveLiveViewServant (do
               (S.mapM_ actionCallback) 
               (DefaultBasePage $ ScriptData 
                 { _liveViewScriptAbsolutePath = "/liveview.js"
-                , _wssUrl = "ws://localhost:5000/liveview"
+                , _wssUrlSpec = Ws
                 })
               "lvroot"
           ) :<|> serveDirectoryWebApp "static"

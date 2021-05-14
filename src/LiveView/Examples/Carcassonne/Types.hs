@@ -4,10 +4,13 @@
 
 module LiveView.Examples.Carcassonne.Types where
 
-
+import Control.Concurrent.STM qualified as STM
+import Control.Concurrent.STM (atomically)
 import Control.Lens
 import Data.HashMap.Strict (HashMap)
+import Data.Hashable
 import Data.Text
+import StmContainers.Map qualified as StmMap
 
 data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
 
@@ -22,13 +25,7 @@ data LRUD a = LRUD
 
 makeClassy ''LRUD
 
-from4Tuple :: (a,a,a,a) -> LRUD a
-from4Tuple (a,b,c,d) = LRUD a b c d
-
-from4List :: [a] -> LRUD a
-from4List [l, r, u, d] = LRUD l r u d
-
-data TileImage = TileImage 
+data TileImage = TileImage
   { _imageName :: Text
   , _imageCcwRotates :: Int
   } deriving Show
@@ -59,9 +56,12 @@ makeClassy ''GameState
 instance HasBoard GameState where
   board = gameBoard
 
+newtype SessionId = SessionId Text deriving (Show, Eq, Ord, Hashable)
+
 data AppContext = AppContext
   { _makeTileImageUrl :: TileImage -> Text
   , _acGameState :: GameState
+  , _sessionId :: Text
   }
 
 makeClassy ''AppContext
@@ -69,5 +69,12 @@ makeClassy ''AppContext
 instance HasGameState AppContext where
   gameState = acGameState
 
+data SessionState a = SessionState
+  { _sessionChan :: STM.TChan (Maybe a)
+  , _sessionCurrState :: a
+  }
 
+newtype ServerContext = ServerContext
+  { _sessionMap :: StmMap.Map SessionId AppContext }
 
+makeClassy ''ServerContext
