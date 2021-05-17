@@ -71,7 +71,7 @@ defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrlSpec) liveCo
               currUrl.pathname = currUrl.pathname + '/liveview';
               await attach(document.getElementById("$rootId"), currUrl);
             } catch (e) {
-              // pass
+              console.err(e);
             }
           }
         })();

@@ -32,10 +32,11 @@ import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
+import Data.Hashable (Hashable)
 
 sampleAppContext :: AppContext
 sampleAppContext = AppContext
-  { _makeTileImageUrl = \(TileImage name ccwRotates) -> 
+  { _makeTileImageUrl = \(TileImage name ccwRotates) ->
       let suffix = case ccwRotates of
             0 -> ""
             _ -> let r = tshow ccwRotates in "-" <> r
@@ -78,7 +79,7 @@ sampleLiveView = do
   renderBoard
   case tileList of
     [] -> ""
-    (currTile:_) -> 
+    (currTile:_) ->
       div_ [class_ "current-turn"] $ do
         renderTile currTile ["current-tile"]
         button_ [hsaction_(makeHsaction "click" "rotate_currTile_left")] "rotate left"
@@ -92,38 +93,53 @@ api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
 initServerContext = do
-  sessMap <- liftIO StmMap.newIO
-  pure (ServerContext sessMap)
+  liftIO $ ServerContext <$> StmMap.newIO
 
 initAppContext :: (MonadIO m) => m AppContext
 initAppContext = do
   initialTiles <- liftIO $ shuffle unshuffledTiles
   pure $ sampleAppContext & gameTiles .~ initialTiles
 
+getOrInit :: (Eq k, Ord k, Hashable k) => STM.STM a -> k -> StmMap.Map k a -> STM.STM a
+getOrInit def k m = do
+  mayV <- StmMap.lookup k m
+  case mayV of
+    Nothing -> do
+      v <- def
+      StmMap.insert v k m >> pure v
+    Just v -> pure v
+
+getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) => m a -> k -> StmMap.Map k a -> m a
+getOrInitM mdef k m = do
+  def <- mdef
+  liftIO $ STM.atomically $ getOrInit (pure def) k m
+
+freshSessState :: (MonadIO m) => m (SessionState AppContext)
+freshSessState = SessionState <$> liftIO STM.newBroadcastTChanIO <*> initAppContext
+
 getSession :: (MonadIO m) => ServerContext -> T.Text -> m AppContext
-getSession servCtxt sessId = liftIO $ do
+getSession servCtxt sessId = liftIO $ fst <$> subscribeSession servCtxt sessId
+
+mutateSession :: (MonadIO m) => ServerContext -> T.Text -> (AppContext -> AppContext) -> m ()
+mutateSession servCtxt sessId f = liftIO $ do
   let sid = SessionId sessId
-  freshAppCtxt <- initAppContext
   STM.atomically $ do
     mayAppCtxt <- StmMap.lookup sid (_sessionMap servCtxt)
     case mayAppCtxt of
-      Nothing -> do
-        StmMap.insert freshAppCtxt sid (_sessionMap servCtxt)
-        pure freshAppCtxt
-      Just ac -> pure ac
+      Nothing -> pure ()
+      Just (SessionState chan ac) -> do
+        let newAC = f ac
+        STM.writeTChan chan $ Just newAC
+        StmMap.insert (SessionState chan newAC) sid (_sessionMap servCtxt)
 
-subscribeSession :: ServerContext -> T.Text -> Stream (Of AppContext) IO ()
+subscribeSession :: ServerContext -> T.Text -> IO (AppContext, Stream (Of AppContext) IO ())
 subscribeSession servCtxt sessId = do
   let sid = SessionId sessId
-  freshAppCtxt <- initAppContext
-  liftIO $ STM.atomically $ do
-    mayAppCtxt <- StmMap.lookup sid (_sessionMap servCtxt)
-    case mayAppCtxt of
-      Nothing -> do
-        StmMap.insert freshAppCtxt sid (_sessionMap servCtxt)
-        pure ()
-      Just _ -> pure ()
-  undefined
+  SessionState wChan ac <- getOrInitM freshSessState sid (_sessionMap servCtxt)
+  chan <- atomically $ STM.dupTChan wChan
+  pure (ac, S.untilRight $ maybe (Right ()) Left <$> STM.atomically (STM.readTChan chan))
+
+
 
 server :: ServerContext -> Server API
 server servCtxt = (\sessId -> serveLiveViewServant (do
@@ -131,18 +147,14 @@ server servCtxt = (\sessId -> serveLiveViewServant (do
             htmlChan <- liftIO STM.newTChanIO
             initialTiles <- liftIO $ shuffle unshuffledTiles
             let initialAppContext = sampleAppContext & gameTiles .~ initialTiles
-            appContextTVar <- liftIO $ STM.newTVarIO initialAppContext
-            pure $ ServantDeps 
-              (getHtml initialAppContext) 
-              (S.repeatM (atomically $ STM.readTChan htmlChan)) 
+            (initialAppContext, acStream) <- liftIO $ subscribeSession servCtxt sessId
+            pure $ ServantDeps
+              (getHtml initialAppContext)
+              (S.map getHtml acStream)
               (S.mapM_ $ \action -> do
-                STM.atomically $ do
-                  ac <- STM.readTVar appContextTVar 
-                  let ac' = sampleReducer action ac
-                  STM.writeTVar appContextTVar ac'
-                  STM.writeTChan htmlChan (getHtml ac')
-                ) 
-              (DefaultBasePage $ ScriptData 
+                mutateSession servCtxt sessId (sampleReducer action)
+                )
+              (DefaultBasePage $ ScriptData
                 { _liveViewScriptAbsolutePath = "/liveview.js"
                 , _wssUrlSpec = Ws
                 })

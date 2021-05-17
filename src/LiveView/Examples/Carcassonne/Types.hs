@@ -1,11 +1,11 @@
-{-# LANGUAGE FunctionalDependencies#-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module LiveView.Examples.Carcassonne.Types where
 
-import Control.Concurrent.STM qualified as STM
 import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM qualified as STM
 import Control.Lens
 import Data.HashMap.Strict (HashMap)
 import Data.Hashable
@@ -17,26 +17,29 @@ data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
 data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
 
 data LRUD a = LRUD
-  { _lrudL :: a
-  , _lrudR :: a
-  , _lrudU :: a
-  , _lrudD :: a
-  } deriving (Functor, Foldable, Traversable, Show)
+  { _lrudL :: a,
+    _lrudR :: a,
+    _lrudU :: a,
+    _lrudD :: a
+  }
+  deriving (Functor, Foldable, Traversable, Show)
 
 makeClassy ''LRUD
 
 data TileImage = TileImage
-  { _imageName :: Text
-  , _imageCcwRotates :: Int
-  } deriving Show
+  { _imageName :: Text,
+    _imageCcwRotates :: Int
+  }
+  deriving (Show)
 
 makeClassy ''TileImage
 
 data Tile = Tile
-  { _sides :: LRUD SideTerrain
-  , _middle :: MiddleTerrain
-  , _image :: TileImage
-  } deriving Show
+  { _sides :: LRUD SideTerrain,
+    _middle :: MiddleTerrain,
+    _image :: TileImage
+  }
+  deriving (Show)
 
 makeClassy ''Tile
 
@@ -47,8 +50,8 @@ newtype Board = Board
 makeClassy ''Board
 
 data GameState = GameState
-  { _gameBoard :: Board
-  , _gameTiles :: [Tile]
+  { _gameBoard :: Board,
+    _gameTiles :: [Tile]
   }
 
 makeClassy ''GameState
@@ -59,9 +62,9 @@ instance HasBoard GameState where
 newtype SessionId = SessionId Text deriving (Show, Eq, Ord, Hashable)
 
 data AppContext = AppContext
-  { _makeTileImageUrl :: TileImage -> Text
-  , _acGameState :: GameState
-  , _sessionId :: Text
+  { _makeTileImageUrl :: TileImage -> Text,
+    _acGameState :: GameState,
+    _sessionId :: Text
   }
 
 makeClassy ''AppContext
@@ -70,11 +73,12 @@ instance HasGameState AppContext where
   gameState = acGameState
 
 data SessionState a = SessionState
-  { _sessionChan :: STM.TChan (Maybe a)
-  , _sessionCurrState :: a
+  { _sessionChan :: STM.TChan (Maybe a),
+    _sessionCurrState :: a
   }
 
 newtype ServerContext = ServerContext
-  { _sessionMap :: StmMap.Map SessionId AppContext }
+  { _sessionMap :: StmMap.Map SessionId (SessionState AppContext)
+  }
 
 makeClassy ''ServerContext
