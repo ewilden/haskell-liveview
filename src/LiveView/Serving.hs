@@ -14,6 +14,7 @@ import Data.Aeson hiding ((.=))
 import Data.Aeson.TH
 import Data.ByteString.Lazy qualified as BL
 import Data.Hashable
+import Data.HashMap.Monoidal (MonoidalHashMap)
 import Data.HashMap.Strict hiding ((!?))
 import qualified Data.HashMap.Strict as HM
 import Data.Text qualified as T
@@ -24,6 +25,7 @@ import LiveView.Html
 import Lucid qualified as L
 import Streaming
 import qualified Streaming.Prelude as S
+import Data.IORef
 
 
 newtype Clock = Clock {
@@ -98,6 +100,17 @@ serveLV deps = do
               S.yield call
   void $ commuteState (initHtml, Clock 0) actionCallStatefulStream
 
+data RenderState state = RenderState
+  { _actionBindings ::
+      IORef (MonoidalHashMap T.Text [ActionCall -> state -> IO state])
+  , _currState :: state
+  }
+data StateStore token state = StateStore
+  { _subscribeState :: token -> IO (state, Stream (Of (Maybe state)) IO ())
+  , _mutateState :: token -> (state -> IO state) -> IO ()
+  }
+
+newtype Renderer state = Renderer (L.HtmlT (ReaderT (RenderState state) IO) ())
 
 makeActionCallConsumer :: Hsaction -> ActionCall -> IO ()
 makeActionCallConsumer hsaction actionCall =

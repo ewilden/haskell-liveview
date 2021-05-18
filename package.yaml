@@ -38,6 +38,7 @@ dependencies:
 - list-t
 - lucid >= 2.9.11 && < 3
 - MonadRandom
+- monoidal-containers
 - mtl >= 2.2.2 && < 3
 - neat-interpolation
 - random
