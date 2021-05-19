@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1b70f80217d6fe1435a6fb3c0b8884cf3696d7f721ea61872c7b0f38b75ac16e
+-- hash: de92f22adf82a86ad9522d2794051a28333a614a3f540d2f11716aaaa62663d5
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Import
       Lib
+      LiveView
       LiveView.Examples.Calculator
       LiveView.Examples.Carcassonne
       LiveView.Examples.Carcassonne.Tiles
