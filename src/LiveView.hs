@@ -33,6 +33,7 @@ import LiveView.Serving
 import Lucid (Html)
 import Lucid qualified as L
 import Lucid.Base qualified as L
+import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read (readMaybe)
@@ -57,10 +58,59 @@ nullBindingState = BindingState mempty 1
 
 data StateStore token state = StateStore
   { _subscribeState :: token -> IO (state, Stream (Of state) IO ()),
-    _mutateState :: token -> (state -> IO state) -> IO ()
+    _mutateState :: token -> (state -> IO state) -> IO (),
+    _deleteState :: token -> IO ()
   }
 
 makeClassy ''StateStore
+
+getOrInit :: (Eq k, Ord k, Hashable k) => STM.STM a -> k -> StmMap.Map k a -> STM.STM a
+getOrInit def k m = do
+  mayV <- StmMap.lookup k m
+  case mayV of
+    Nothing -> do
+      v <- def
+      StmMap.insert v k m >> pure v
+    Just v -> pure v
+
+getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) =>
+  m a ->
+  k ->
+  StmMap.Map k a ->
+  m a
+getOrInitM mdef k m = do
+  def <- mdef
+  liftIO $ STM.atomically $ getOrInit (pure def) k m
+
+inMemoryStateStore :: forall state. IO state -> IO (StateStore T.Text state)
+inMemoryStateStore mkState = do
+  stmMap :: StmMap.Map T.Text (state, STM.TChan (Either () state)) <- StmMap.newIO
+  let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChanIO
+      subscribe :: T.Text -> IO (state, Stream (Of state) IO ())
+      subscribe token = do
+        (s, wChan) <- getOrInitM mkStateWithChan token stmMap
+        rChan <- atomically $ STM.dupTChan wChan
+        pure (s, S.untilLeft $ STM.atomically (STM.readTChan rChan))
+      mutate :: T.Text -> (state -> IO state) -> IO ()
+      mutate token f = do
+        mayPair <- atomically $ StmMap.lookup token stmMap
+        case mayPair of
+          Nothing -> pure ()
+          Just (s, wChan) -> do
+            s' <- f s
+            atomically $ do
+              STM.writeTChan wChan $ Right s'
+              StmMap.insert (s', wChan) token stmMap
+      delete token = atomically $ do
+        mayPair <- StmMap.lookup token stmMap
+        case mayPair of
+          Nothing -> pure ()
+          Just (s, wChan) -> do
+            STM.writeTChan wChan $ Left ()
+            StmMap.delete token stmMap
+  pure $ StateStore subscribe mutate delete
+
+
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 
@@ -168,4 +218,4 @@ serveLiveView deps store lv incomingMessages token = do
                               handlers
                           )
                    in _mutateState store token composedHandler
-            else pure () -- clocks don't match, so pass
+            else _sdDebugPrint deps $ "No matching handler for " <> show msg

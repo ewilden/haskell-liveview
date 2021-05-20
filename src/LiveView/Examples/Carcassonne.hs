@@ -109,7 +109,11 @@ getOrInit def k m = do
       StmMap.insert v k m >> pure v
     Just v -> pure v
 
-getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) => m a -> k -> StmMap.Map k a -> m a
+getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) =>
+  m a ->
+  k ->
+  StmMap.Map k a ->
+  m a
 getOrInitM mdef k m = do
   def <- mdef
   liftIO $ STM.atomically $ getOrInit (pure def) k m
