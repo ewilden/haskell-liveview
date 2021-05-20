@@ -18,8 +18,8 @@ import Data.Aeson hiding ((.=))
 import Data.Aeson.TH
 import Data.ByteString.Lazy qualified as BL
 import Data.HashMap.Monoidal (MonoidalHashMap)
-import Data.HashMap.Strict hiding ((!?))
-import Data.HashMap.Strict qualified as HM
+import Data.HashMap.Strict hiding (foldr, (!?))
+import Data.HashMap.Strict qualified as HM hiding (foldr)
 import Data.Hashable
 import Data.IORef
 import Data.IntMap.Monoidal.Strict (MonoidalIntMap)
@@ -35,6 +35,7 @@ import Lucid qualified as L
 import Lucid.Base qualified as L
 import Streaming
 import Streaming.Prelude qualified as S
+import Text.Read (readMaybe)
 
 newtype RenderState state = RenderState
   { _currState :: state
@@ -130,21 +131,41 @@ serveLiveView deps store lv incomingMessages token = do
   (initialState, states) <- _subscribeState store token
   (initHtml, initBs) <- runLiveView lv initialState nullBindingState
   let initClock = Clock 0
-  ioref <- newIORef (initHtml, initBs, initClock)
+  ioref <- newIORef (initHtml, initBs, initClock, initialState)
   _sdSendSocketMessage deps $
     encode (("mount" :: T.Text, toSplitText initHtml), initClock)
   let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
   flip S.mapM_ inpStream $ \case
     Left s -> do
-      (h, _, c) <- readIORef ioref
+      (h, _, c, _) <- readIORef ioref
       let c' = succ c
       (h', bs') <- runLiveView lv s nullBindingState
       _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
-      writeIORef ioref (h', bs', c')
+      writeIORef ioref (h', bs', c', s)
     Right msg -> do
       case (decode msg :: Maybe (ActionCall, Clock)) of
         Nothing -> pure ()
-        Just (call, clock) -> do
-          (_, bs, c) <- readIORef ioref
-          -- TODO: actually use ActionCall and bound callback (incl value)
-          undefined
+        Just (call, callClock) -> do
+          (_, bs, clock, s) <- readIORef ioref
+          if callClock == clock
+            then do
+              let mayBSeed = readMaybe @Int (T.unpack $ _action call)
+                  mayHandler = do
+                    seed <- mayBSeed
+                    bs
+                      ^? actionBindings
+                        . to MonoidalIntMap.getMonoidalIntMap
+                        . ix seed
+              case mayHandler of
+                Nothing -> pure ()
+                Just handlers ->
+                  let composedHandler =
+                        foldr
+                          (<=<)
+                          pure
+                          ( fmap
+                              ($ BindingCall (_payload call ^? ix "value"))
+                              handlers
+                          )
+                   in _mutateState store token composedHandler
+            else pure () -- clocks don't match, so pass
