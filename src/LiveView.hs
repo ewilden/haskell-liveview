@@ -73,7 +73,8 @@ getOrInit def k m = do
       StmMap.insert v k m >> pure v
     Just v -> pure v
 
-getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) =>
+getOrInitM ::
+  (MonadIO m, Eq k, Ord k, Hashable k) =>
   m a ->
   k ->
   StmMap.Map k a ->
@@ -82,16 +83,20 @@ getOrInitM mdef k m = do
   def <- mdef
   liftIO $ STM.atomically $ getOrInit (pure def) k m
 
-inMemoryStateStore :: forall state. IO state -> IO (StateStore T.Text state)
+inMemoryStateStore ::
+  forall state k.
+  (Eq k, Ord k, Hashable k) =>
+  IO state ->
+  IO (StateStore k state)
 inMemoryStateStore mkState = do
-  stmMap :: StmMap.Map T.Text (state, STM.TChan (Either () state)) <- StmMap.newIO
+  stmMap :: StmMap.Map k (state, STM.TChan (Either () state)) <- StmMap.newIO
   let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChanIO
-      subscribe :: T.Text -> IO (state, Stream (Of state) IO ())
+      subscribe :: k -> IO (state, Stream (Of state) IO ())
       subscribe token = do
         (s, wChan) <- getOrInitM mkStateWithChan token stmMap
         rChan <- atomically $ STM.dupTChan wChan
         pure (s, S.untilLeft $ STM.atomically (STM.readTChan rChan))
-      mutate :: T.Text -> (state -> IO state) -> IO ()
+      mutate :: k -> (state -> IO state) -> IO ()
       mutate token f = do
         mayPair <- atomically $ StmMap.lookup token stmMap
         case mayPair of
@@ -109,8 +114,6 @@ inMemoryStateStore mkState = do
             STM.writeTChan wChan $ Left ()
             StmMap.delete token stmMap
   pure $ StateStore subscribe mutate delete
-
-
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 
@@ -176,46 +179,53 @@ serveLiveView ::
   LiveView state ->
   Stream (Of BL.ByteString) IO () ->
   token ->
-  IO ()
-serveLiveView deps store lv incomingMessages token = do
-  (initialState, states) <- _subscribeState store token
-  (initHtml, initBs) <- runLiveView lv initialState nullBindingState
-  let initClock = Clock 0
-  ioref <- newIORef (initHtml, initBs, initClock, initialState)
-  _sdSendSocketMessage deps $
-    encode (("mount" :: T.Text, toSplitText initHtml), initClock)
-  let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
-  flip S.mapM_ inpStream $ \case
-    Left s -> do
-      (h, _, c, _) <- readIORef ioref
-      let c' = succ c
-      (h', bs') <- runLiveView lv s nullBindingState
-      _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
-      writeIORef ioref (h', bs', c', s)
-    Right msg -> do
-      case (decode msg :: Maybe (ActionCall, Clock)) of
-        Nothing -> pure ()
-        Just (call, callClock) -> do
-          (_, bs, clock, s) <- readIORef ioref
-          if callClock == clock
-            then do
-              let mayBSeed = readMaybe @Int (T.unpack $ _action call)
-                  mayHandler = do
-                    seed <- mayBSeed
-                    bs
-                      ^? actionBindings
-                        . to MonoidalIntMap.getMonoidalIntMap
-                        . ix seed
-              case mayHandler of
-                Nothing -> pure ()
-                Just handlers ->
-                  let composedHandler =
-                        foldr
-                          (<=<)
-                          pure
-                          ( fmap
-                              ($ BindingCall (_payload call ^? ix "value"))
-                              handlers
-                          )
-                   in _mutateState store token composedHandler
-            else _sdDebugPrint deps $ "No matching handler for " <> show msg
+  (IO (Html ()), IO ())
+serveLiveView deps store lv incomingMessages token =
+  (init, live)
+  where
+    init = do
+      (initialState, _) <- _subscribeState store token
+      (initHtml, _) <- runLiveView lv initialState nullBindingState
+      pure initHtml
+    live = do
+      (initialState, states) <- _subscribeState store token
+      (initHtml, initBs) <- runLiveView lv initialState nullBindingState
+      let initClock = Clock 0
+      ioref <- newIORef (initHtml, initBs, initClock, initialState)
+      _sdSendSocketMessage deps $
+        encode (("mount" :: T.Text, toSplitText initHtml), initClock)
+      let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
+      flip S.mapM_ inpStream $ \case
+        Left s -> do
+          (h, _, c, _) <- readIORef ioref
+          let c' = succ c
+          (h', bs') <- runLiveView lv s nullBindingState
+          _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
+          writeIORef ioref (h', bs', c', s)
+        Right msg -> do
+          case (decode msg :: Maybe (ActionCall, Clock)) of
+            Nothing -> pure ()
+            Just (call, callClock) -> do
+              (_, bs, clock, s) <- readIORef ioref
+              if callClock == clock
+                then do
+                  let mayBSeed = readMaybe @Int (T.unpack $ _action call)
+                      mayHandler = do
+                        seed <- mayBSeed
+                        bs
+                          ^? actionBindings
+                            . to MonoidalIntMap.getMonoidalIntMap
+                            . ix seed
+                  case mayHandler of
+                    Nothing -> pure ()
+                    Just handlers ->
+                      let composedHandler =
+                            foldr
+                              (<=<)
+                              pure
+                              ( fmap
+                                  ($ BindingCall (_payload call ^? ix "value"))
+                                  handlers
+                              )
+                       in _mutateState store token composedHandler
+                else _sdDebugPrint deps $ "No matching handler for " <> show msg

@@ -10,6 +10,7 @@ import Control.Lens
 import Data.HashMap.Strict (HashMap)
 import Data.Hashable
 import Data.Text
+import LiveView
 import StmContainers.Map qualified as StmMap
 
 data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
@@ -78,7 +79,10 @@ data SessionState a = SessionState
   }
 
 newtype ServerContext = ServerContext
-  { _sessionMap :: StmMap.Map SessionId (SessionState AppContext)
+  { _scStateStore :: StateStore SessionId AppContext
   }
 
 makeClassy ''ServerContext
+
+instance HasStateStore ServerContext SessionId AppContext where
+  stateStore = scStateStore

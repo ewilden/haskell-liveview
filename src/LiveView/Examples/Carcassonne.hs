@@ -19,6 +19,7 @@ import Focus qualified
 import Import
 import Lib
 import ListT qualified
+import LiveView
 import LiveView.Html
 import LiveView.Serving
 import LiveView.Serving.Servant
@@ -85,6 +86,35 @@ sampleLiveView = do
         button_ [hsaction_(makeHsaction "click" "rotate_currTile_left")] "rotate left"
         button_ [hsaction_(makeHsaction "click" "rotate_currTile_right")] "rotate right"
 
+liveView :: LiveView AppContext
+liveView = do
+  link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
+  tileList <- view (gameState . gameTiles)
+  mkUrl <- view makeTileImageUrl
+  let currTileProp = case tileList of
+        [] -> ""
+        (currTile:_) -> let url = mkUrl (_image currTile) in
+          [txt|--curr-tile-img: url('${url}');|]
+  style_ [txt|
+    :root {
+      --tile-hl-color: gold;
+      --tile-size: 80px;
+      $currTileProp
+    }
+    |]
+  renderBoard
+  case tileList of
+    [] -> ""
+    (currTile:_) ->
+      div_ [class_ "current-turn"] $ do
+        renderTile currTile ["current-tile"]
+        rotLeft <- addActionBinding "click"
+          (\_ appContext -> pure $ appContext & gameTiles . ix 0 %~ rotateCcw)
+        rotRight <- addActionBinding "click"
+          (\_ appContext -> pure $ appContext & gameTiles . ix 0 %~ rotateCw)
+        button_ [hsaction_ rotLeft] "rotate left"
+        button_ [hsaction_ rotRight] "rotate right"
+
 
 type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) :<|> Raw
 
@@ -93,30 +123,12 @@ api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
 initServerContext = do
-  liftIO $ ServerContext <$> StmMap.newIO
+  liftIO $ ServerContext <$> inMemoryStateStore initAppContext
 
 initAppContext :: (MonadIO m) => m AppContext
 initAppContext = do
   initialTiles <- liftIO $ shuffle unshuffledTiles
   pure $ sampleAppContext & gameTiles .~ initialTiles
-
-getOrInit :: (Eq k, Ord k, Hashable k) => STM.STM a -> k -> StmMap.Map k a -> STM.STM a
-getOrInit def k m = do
-  mayV <- StmMap.lookup k m
-  case mayV of
-    Nothing -> do
-      v <- def
-      StmMap.insert v k m >> pure v
-    Just v -> pure v
-
-getOrInitM :: (MonadIO m, Eq k, Ord k, Hashable k) =>
-  m a ->
-  k ->
-  StmMap.Map k a ->
-  m a
-getOrInitM mdef k m = do
-  def <- mdef
-  liftIO $ STM.atomically $ getOrInit (pure def) k m
 
 freshSessState :: (MonadIO m) => m (SessionState AppContext)
 freshSessState = SessionState <$> liftIO STM.newBroadcastTChanIO <*> initAppContext
@@ -124,26 +136,19 @@ freshSessState = SessionState <$> liftIO STM.newBroadcastTChanIO <*> initAppCont
 getSession :: (MonadIO m) => ServerContext -> T.Text -> m AppContext
 getSession servCtxt sessId = liftIO $ fst <$> subscribeSession servCtxt sessId
 
-mutateSession :: (MonadIO m) => ServerContext -> T.Text -> (AppContext -> AppContext) -> m ()
+mutateSession :: (MonadIO m) =>
+  ServerContext ->
+  T.Text ->
+  (AppContext -> AppContext) ->
+  m ()
 mutateSession servCtxt sessId f = liftIO $ do
   let sid = SessionId sessId
-  STM.atomically $ do
-    mayAppCtxt <- StmMap.lookup sid (_sessionMap servCtxt)
-    case mayAppCtxt of
-      Nothing -> pure ()
-      Just (SessionState chan ac) -> do
-        let newAC = f ac
-        STM.writeTChan chan $ Just newAC
-        StmMap.insert (SessionState chan newAC) sid (_sessionMap servCtxt)
+  (servCtxt ^. stateStore . mutateState) sid (pure . f)
 
 subscribeSession :: ServerContext -> T.Text -> IO (AppContext, Stream (Of AppContext) IO ())
 subscribeSession servCtxt sessId = do
   let sid = SessionId sessId
-  SessionState wChan ac <- getOrInitM freshSessState sid (_sessionMap servCtxt)
-  chan <- atomically $ STM.dupTChan wChan
-  pure (ac, S.untilRight $ maybe (Right ()) Left <$> STM.atomically (STM.readTChan chan))
-
-
+  (servCtxt ^. stateStore . subscribeState) sid
 
 server :: ServerContext -> Server API
 server servCtxt = (\sessId -> serveLiveViewServant (do
@@ -164,6 +169,13 @@ server servCtxt = (\sessId -> serveLiveViewServant (do
                 })
               "lvroot"
           )) :<|> serveDirectoryWebApp "static"
+
+server' :: ServerContext -> Server API
+server' servCtxt = (\sessId -> serveServantLiveView
+                   (const (pure ()))
+                   (servCtxt ^. stateStore)
+                   liveView
+                   (SessionId sessId)) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
 main = do

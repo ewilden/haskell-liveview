@@ -16,6 +16,7 @@ import Data.Text qualified as T
 import Data.Text.Encoding
 import Debug.Trace
 import Import
+import LiveView
 import LiveView.Html
 import LiveView.Serving
 import Lucid
@@ -101,3 +102,32 @@ serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
             , _lvdSendSocketMessage = WS.sendTextData conn
             , _lvdDebugPrint = putStrLn
             }
+
+serveServantLiveView ::
+  (String -> IO ()) ->
+  StateStore token state ->
+  LiveView state ->
+  token ->
+  Server LiveViewApi
+serveServantLiveView debugPrint store lv token =
+  initialRenderEndpoint :<|> liveRenderEndpoint
+  where
+    initialRenderEndpoint = liftIO init
+    liveRenderEndpoint conn = liftIO (live conn)
+    (init, _) =
+      serveLiveView
+        (ServDeps (const (pure ())) debugPrint)
+        store
+        lv
+        mempty
+        token
+    live conn = snd $
+      serveLiveView
+        (ServDeps sendMsg debugPrint)
+        store
+        lv
+        incomingMsgs
+        token
+        where
+          sendMsg = WS.sendTextData conn
+          incomingMsgs = S.repeatM (WS.receiveData conn)
