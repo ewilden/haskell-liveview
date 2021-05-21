@@ -173,6 +173,11 @@ server servCtxt = (\sessId -> serveLiveViewServant (do
 server' :: ServerContext -> Server API
 server' servCtxt = (\sessId -> serveServantLiveView
                    (const (pure ()))
+                   (DefaultBasePage $ ScriptData
+                    { _liveViewScriptAbsolutePath = "/liveview.js"
+                    , _wssUrlSpec = Ws
+                    })
+                   "lvroot"
                    (servCtxt ^. stateStore)
                    liveView
                    (SessionId sessId)) :<|> serveDirectoryWebApp "static"
@@ -180,4 +185,4 @@ server' servCtxt = (\sessId -> serveServantLiveView
 main :: IO ()
 main = do
   servCtxt <- initServerContext
-  Warp.run 5000 (serve api (server servCtxt))
+  Warp.run 5000 (serve api (server' servCtxt))

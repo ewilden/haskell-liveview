@@ -105,27 +105,34 @@ serveLiveViewServant getDeps = initialRenderEndpoint :<|> liveRenderEndpoint
 
 serveServantLiveView ::
   (String -> IO ()) ->
+  BasePageSpec ->
+  T.Text ->
   StateStore token state ->
   LiveView state ->
   token ->
   Server LiveViewApi
-serveServantLiveView debugPrint store lv token =
+serveServantLiveView debugPrint basePage rootId store lv token =
   initialRenderEndpoint :<|> liveRenderEndpoint
   where
-    initialRenderEndpoint = liftIO init
+    rootWrapper x = div_ [id_ rootId] x
+    initialRenderEndpoint = liftIO $ do
+      initHtml <- init
+      pure $ (case basePage of
+                DefaultBasePage scriptData -> defaultBasePage rootId scriptData
+                CustomBasePage f -> f) (div_ [id_ rootId] initHtml)
     liveRenderEndpoint conn = liftIO (live conn)
     (init, _) =
       serveLiveView
         (ServDeps (const (pure ())) debugPrint)
         store
-        lv
+        (rootWrapper lv)
         mempty
         token
     live conn = snd $
       serveLiveView
         (ServDeps sendMsg debugPrint)
         store
-        lv
+        (rootWrapper lv)
         incomingMsgs
         token
         where
