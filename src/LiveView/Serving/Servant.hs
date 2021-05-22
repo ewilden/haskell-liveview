@@ -119,7 +119,7 @@ serveServantLiveView debugPrint basePage rootId store lv token =
       initHtml <- init
       pure $ (case basePage of
                 DefaultBasePage scriptData -> defaultBasePage rootId scriptData
-                CustomBasePage f -> f) (div_ [id_ rootId] initHtml)
+                CustomBasePage f -> f) initHtml
     liveRenderEndpoint conn = liftIO (live conn)
     (init, _) =
       serveLiveView

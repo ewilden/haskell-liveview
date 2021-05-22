@@ -102,7 +102,7 @@ liveView = do
       $currTileProp
     }
     |]
-  renderBoard
+  renderBoard'
   case tileList of
     [] -> ""
     (currTile:_) ->
