@@ -42,6 +42,7 @@ dependencies:
 - mtl >= 2.2.2 && < 3
 - neat-interpolation
 - random
+- reducers
 - servant
 - servant-lucid
 - servant-server

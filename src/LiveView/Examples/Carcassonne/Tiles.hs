@@ -171,7 +171,6 @@ renderBoard' = do
                           <$> addActionBinding
                             "click"
                             ( \_ r ->
-                                pure $
                                   r & appContext . gameTiles %~ drop 1
                                     & appContext . gameBoard . xyToTile . at (x, y) .~ Just currTile
                             )

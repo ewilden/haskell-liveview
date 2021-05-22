@@ -109,9 +109,9 @@ liveView = do
       div_ [class_ "current-turn"] $ do
         renderTile currTile ["current-tile"]
         rotLeft <- addActionBinding "click"
-          (\_ appContext -> pure $ appContext & gameTiles . ix 0 %~ rotateCcw)
+          (\_ appContext -> appContext & gameTiles . ix 0 %~ rotateCcw)
         rotRight <- addActionBinding "click"
-          (\_ appContext -> pure $ appContext & gameTiles . ix 0 %~ rotateCw)
+          (\_ appContext -> appContext & gameTiles . ix 0 %~ rotateCw)
         button_ [hsaction_ rotLeft] "rotate left"
         button_ [hsaction_ rotRight] "rotate right"
 
@@ -143,7 +143,7 @@ mutateSession :: (MonadIO m) =>
   m ()
 mutateSession servCtxt sessId f = liftIO $ do
   let sid = SessionId sessId
-  (servCtxt ^. stateStore . mutateState) sid (pure . f)
+  (servCtxt ^. stateStore . mutateState) sid f
 
 subscribeSession :: ServerContext -> T.Text -> IO (AppContext, Stream (Of AppContext) IO ())
 subscribeSession servCtxt sessId = do
