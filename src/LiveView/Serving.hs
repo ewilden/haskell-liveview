@@ -72,39 +72,7 @@ mergePar a b = do
             go
   go
 
-data DepInput = DepHtml (L.Html ()) | DepMessage BL.ByteString
-
-data LiveViewDeps r m = LiveViewDeps
-  { _lvdInitialHtml :: L.Html (),
-    _lvdInputStream :: Stream (Of DepInput) m (),
-    _lvdSendSocketMessage :: BL.ByteString -> m (),
-    _lvdDebugPrint :: String -> m ()
-  }
-
 commuteState :: (Monad m) => s -> Stream (Of a) (StateT s m) r -> Stream (Of a) m (r, s)
 commuteState s stream =
   runStateT (distribute stream) s
 
-serveLV :: forall r m. (Monad m) => LiveViewDeps r m -> Stream (Of ActionCall) m ()
-serveLV deps = do
-  let initHtml = _lvdInitialHtml deps
-      mountList = toSplitText initHtml
-  lift $ _lvdDebugPrint deps "start"
-  lift $ _lvdSendSocketMessage deps $ encode (("mount" :: T.Text, mountList), Clock 0)
-  let asStatefulStream :: Stream (Of DepInput) (StateT (L.Html (), Clock) m) ()
-      asStatefulStream = hoist lift $ _lvdInputStream deps
-      actionCallStatefulStream :: Stream (Of ActionCall) (StateT (L.Html (), Clock) m) ()
-      actionCallStatefulStream = S.for asStatefulStream $ \case
-        DepHtml h -> do
-          lift $ lift $ _lvdDebugPrint deps "DepState"
-          prevHtml <- _1 <<.= h
-          clock <- _2 <%= succ
-          lift $ lift $ _lvdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml prevHtml h), clock)
-        DepMessage rawMessage -> do
-          lift $ lift $ _lvdDebugPrint deps "DepMessage"
-          case (decode rawMessage :: Maybe (ActionCall, Clock)) of
-            Nothing -> pure ()
-            Just (call, clock) -> do
-              lift $ lift $ _lvdDebugPrint deps "yield call"
-              S.yield call
-  void $ commuteState (initHtml, Clock 0) actionCallStatefulStream

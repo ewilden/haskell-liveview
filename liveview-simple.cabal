@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cab1d2139402e8b19fcbd258794e0d7a0b349d0e9606983ef41d679b01120cf2
+-- hash: bac54cd2a3fbfde0c3f9c851dbb490229347cb763fd06b4852a1586bb4d7cc9b
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -111,7 +111,6 @@ library
     , stm
     , stm-containers
     , streaming
-    , streamly
     , text >=1.2.3.1 && <2
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
@@ -197,7 +196,6 @@ executable liveview-simple-exe
     , stm
     , stm-containers
     , streaming
-    , streamly
     , text >=1.2.3.1 && <2
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
@@ -284,7 +282,6 @@ test-suite liveview-simple-test
     , stm
     , stm-containers
     , streaming
-    , streamly
     , text >=1.2.3.1 && <2
     , unliftio
     , unordered-containers >=0.2.13.0 && <1

@@ -1,0 +1,54 @@
+import Control.Lens ( (&) )
+import Control.Monad
+    ( guard,
+      join,
+      Monad(..),
+      Functor(..),
+      MonadFail(..),
+      mapM,
+      sequence,
+      (=<<),
+      ap,
+      liftM,
+      liftM2,
+      liftM3,
+      liftM4,
+      liftM5,
+      when,
+      MonadPlus(..),
+      mapM_,
+      sequence_,
+      (<$!>),
+      (<=<),
+      (>=>),
+      filterM,
+      foldM,
+      foldM_,
+      forever,
+      mapAndUnzipM,
+      mfilter,
+      replicateM,
+      replicateM_,
+      unless,
+      zipWithM,
+      zipWithM_,
+      forM_,
+      msum,
+      void,
+      forM )
+import Data.Composition ()
+import Data.Maybe
+    ( Maybe(..),
+      maybe,
+      catMaybes,
+      fromJust,
+      fromMaybe,
+      isJust,
+      isNothing,
+      listToMaybe,
+      mapMaybe,
+      maybeToList )
+import Data.String ()
+import Data.Text ( pack, Text )
+import Data.Tuple.Extra ()
+import NeatInterpolation ( trimming )

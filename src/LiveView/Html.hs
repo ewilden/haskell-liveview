@@ -9,10 +9,7 @@ module LiveView.Html (
 
 import Control.Lens hiding ((.=))
 import Control.Lens qualified as L
-import Control.Monad.Reader
-import Control.Monad.State
 import Data.Aeson
-import Data.Aeson.QQ
 import Data.Algorithm.Diff
 import Data.HashMap.Strict hiding ((!?))
 import Data.Hashable
@@ -22,9 +19,6 @@ import Data.Text.Lazy qualified as TL
 import Data.Text hiding (foldl', length, replicate, singleton, zip)
 import Data.Vector hiding (length, replicate, singleton, toList, zip)
 import Data.Vector qualified as V
-import Hedgehog
-import Hedgehog.Gen qualified as Gen
-import Hedgehog.Range qualified as Range
 import Import
 import Lucid qualified
 import Lucid qualified as L
@@ -106,11 +100,6 @@ hsactions_ = hsaction_ . mconcat
 
 makeHsaction :: T.Text -> T.Text -> Hsaction
 makeHsaction event action = Hsaction $ singleton event action
-
-newtype LiveM r a = LiveM
-  { runLiveM :: Reader r a
-  }
-  deriving (Functor, Applicative, Monad, MonadReader r)
 
 {-
 

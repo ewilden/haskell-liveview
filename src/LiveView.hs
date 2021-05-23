@@ -6,7 +6,6 @@
 
 module LiveView where
 
-import Control.Concurrent.Async qualified as Async
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM qualified as STM
 import Control.Lens
