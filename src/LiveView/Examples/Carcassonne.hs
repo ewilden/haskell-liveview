@@ -46,46 +46,6 @@ sampleAppContext = AppContext
   , _sessionId = "sampleAppContext"
   }
 
-sampleReducer :: ActionCall -> AppContext -> AppContext
-sampleReducer actionCall appContext
-  | _action actionCall == "rotate_currTile_left" = appContext & gameTiles . ix 0 %~ rotateCcw
-  | _action actionCall == "rotate_currTile_right" = appContext & gameTiles . ix 0 %~ rotateCw
-  | _action actionCall == "place_currTile" =
-      let currTile = appContext ^?! gameTiles . ix 0
-          rawX = _payload actionCall ^?! ix "x"
-          rawY = _payload actionCall ^?! ix "y"
-          x = read (T.unpack rawX)
-          y = read (T.unpack rawY)
-      in
-        appContext & gameTiles %~ drop 1
-        & gameBoard . xyToTile . at (x, y) .~ Just currTile
-  | otherwise = appContext
-
-sampleLiveView :: HtmlT (Reader AppContext) ()
-sampleLiveView = do
-  link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
-  tileList <- view (gameState . gameTiles)
-  mkUrl <- view makeTileImageUrl
-  let currTileProp = case tileList of
-        [] -> ""
-        (currTile:_) -> let url = mkUrl (_image currTile) in
-          [txt|--curr-tile-img: url('${url}');|]
-  style_ [txt|
-    :root {
-      --tile-hl-color: gold;
-      --tile-size: 80px;
-      $currTileProp
-    }
-    |]
-  renderBoard
-  case tileList of
-    [] -> ""
-    (currTile:_) ->
-      div_ [class_ "current-turn"] $ do
-        renderTile currTile ["current-tile"]
-        button_ [hsaction_(makeHsaction "click" "rotate_currTile_left")] "rotate left"
-        button_ [hsaction_(makeHsaction "click" "rotate_currTile_right")] "rotate right"
-
 liveView :: LiveView AppContext
 liveView = do
   link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
@@ -109,9 +69,9 @@ liveView = do
       div_ [class_ "current-turn"] $ do
         renderTile currTile ["current-tile"]
         rotLeft <- addActionBinding "click"
-          (\_ appContext -> appContext & gameTiles . ix 0 %~ rotateCcw)
+          (\_ -> gameTiles . ix 0 %~ rotateCcw)
         rotRight <- addActionBinding "click"
-          (\_ appContext -> appContext & gameTiles . ix 0 %~ rotateCw)
+          (\_ -> gameTiles . ix 0 %~ rotateCw)
         button_ [hsaction_ rotLeft] "rotate left"
         button_ [hsaction_ rotRight] "rotate right"
 
@@ -130,49 +90,9 @@ initAppContext = do
   initialTiles <- liftIO $ shuffle unshuffledTiles
   pure $ sampleAppContext & gameTiles .~ initialTiles
 
-freshSessState :: (MonadIO m) => m (SessionState AppContext)
-freshSessState = SessionState <$> liftIO STM.newBroadcastTChanIO <*> initAppContext
-
-getSession :: (MonadIO m) => ServerContext -> T.Text -> m AppContext
-getSession servCtxt sessId = liftIO $ fst <$> subscribeSession servCtxt sessId
-
-mutateSession :: (MonadIO m) =>
-  ServerContext ->
-  T.Text ->
-  (AppContext -> AppContext) ->
-  m ()
-mutateSession servCtxt sessId f = liftIO $ do
-  let sid = SessionId sessId
-  (servCtxt ^. stateStore . mutateState) sid f
-
-subscribeSession :: ServerContext -> T.Text -> IO (AppContext, Stream (Of AppContext) IO ())
-subscribeSession servCtxt sessId = do
-  let sid = SessionId sessId
-  (servCtxt ^. stateStore . subscribeState) sid
-
-server :: ServerContext -> Server API
-server servCtxt = (\sessId -> serveLiveViewServant (do
-            let getHtml ac = flip runReader ac $ commuteHtmlT sampleLiveView
-            htmlChan <- liftIO STM.newTChanIO
-            initialTiles <- liftIO $ shuffle unshuffledTiles
-            let initialAppContext = sampleAppContext & gameTiles .~ initialTiles
-            (initialAppContext, acStream) <- liftIO $ subscribeSession servCtxt sessId
-            pure $ ServantDeps
-              (getHtml initialAppContext)
-              (S.map getHtml acStream)
-              (S.mapM_ $ \action -> do
-                mutateSession servCtxt sessId (sampleReducer action)
-                )
-              (DefaultBasePage $ ScriptData
-                { _liveViewScriptAbsolutePath = "/liveview.js"
-                , _wssUrlSpec = Ws
-                })
-              "lvroot"
-          )) :<|> serveDirectoryWebApp "static"
-
 server' :: ServerContext -> Server API
 server' servCtxt = (\sessId -> serveServantLiveView
-                   (const (pure ()))
+                   putStrLn
                    (DefaultBasePage $ ScriptData
                     { _liveViewScriptAbsolutePath = "/liveview.js"
                     , _wssUrlSpec = Ws

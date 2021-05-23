@@ -144,11 +144,12 @@ renderBoard' = do
       spotsToRender = (,) <$> [xStart .. xEnd] <*> [yStart .. yEnd]
       neighborhood :: (Int, Int) -> LRUD (Maybe Tile)
       neighborhood (x, y) =
-        LRUD
-          (f (x - 1, y))
-          (f (x + 1, y))
-          (f (x, y + 1))
-          (f (x, y - 1))
+        f
+          <$> LRUD
+            (x - 1, y)
+            (x + 1, y)
+            (x, y + 1)
+            (x, y - 1)
         where
           f loc = board' ^? xyToTile . ix loc
       renderSpot :: (Int, Int) -> LiveView r
@@ -171,8 +172,8 @@ renderBoard' = do
                           <$> addActionBinding
                             "click"
                             ( \_ r ->
-                                  r & appContext . gameTiles %~ drop 1
-                                    & appContext . gameBoard . xyToTile . at (x, y) .~ Just currTile
+                                r & appContext . gameTiles %~ drop 1
+                                  & appContext . gameBoard . xyToTile . at (x, y) ?~ currTile
                             )
                       _ -> pure Nothing
                   let canPlaceTileClass = maybe "cant-place" (const "can-place") $ mayPlaceCurrTile
@@ -182,70 +183,6 @@ renderBoard' = do
                           pure $ class_ canPlaceTileClass
                         ]
                     $ ""
-                -- (fromString $ show (neighborhood loc))
-                Just tile -> renderTileImage (_image tile) []
-  div_
-    [ class_ "board",
-      style_
-        [txt|
-          grid-template-columns: repeat($numX, $tileSize);
-          grid-template-rows: repeat($numY, $tileSize);
-          |]
-    ]
-    $ mapM_ renderSpot spotsToRender
-
-renderBoard :: forall m r. (MonadReader r m, HasAppContext r) => HtmlT m ()
-renderBoard = do
-  board' <- view (appContext . gameState . board)
-  mayCurrTile <- asks (\s -> s ^? appContext . gameState . gameTiles . ix 0)
-  let (LRUD left right up down) = computeTileBounds board'
-      xStart = left - 1
-      xEnd = right + 1
-      yStart = down - 1
-      yEnd = up + 1
-      numX = tshow $ xEnd - xStart + 1
-      numY = tshow $ yEnd - yStart + 1
-      spotsToRender = (,) <$> [xStart .. xEnd] <*> [yStart .. yEnd]
-      neighborhood :: (Int, Int) -> LRUD (Maybe Tile)
-      neighborhood (x, y) =
-        LRUD
-          (f (x - 1, y))
-          (f (x + 1, y))
-          (f (x, y + 1))
-          (f (x, y - 1))
-        where
-          f loc = board' ^? xyToTile . ix loc
-      renderSpot :: (Int, Int) -> HtmlT m ()
-      renderSpot loc@(x, y) =
-        let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2]
-         in div_
-              [ style_
-                  [txt|
-              grid-area: $y0 / $x0 / $y1 / $x1;
-              width: 100%;
-              height: 100%;|],
-                class_ "spot"
-              ]
-              $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x, y) of
-                Nothing ->
-                  let mayPlaceTileAttrs =
-                        maybeToList mayCurrTile
-                          >>= ( \t ->
-                                  if canPlace t (neighborhood loc)
-                                    then
-                                      [ (hsaction_ (makeHsaction "click" "place_currTile")),
-                                        hsvalue_ "x" (tshow x),
-                                        hsvalue_ "y" (tshow y)
-                                      ]
-                                    else []
-                              )
-                      canPlaceTileClass = maybe "cant-place" (const "can-place") $ mayPlaceTileAttrs ^? ix 0
-                   in div_
-                        ?|| [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|],
-                              mayPlaceTileAttrs,
-                              pure $ class_ canPlaceTileClass
-                            ]
-                        $ ""
                 -- (fromString $ show (neighborhood loc))
                 Just tile -> renderTileImage (_image tile) []
   div_

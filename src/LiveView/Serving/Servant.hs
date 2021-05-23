@@ -128,7 +128,7 @@ serveServantLiveView debugPrint basePage rootId store lv token =
         (rootWrapper lv)
         mempty
         token
-    live conn = snd $
+    live conn = withPingThread conn 30 (debugPrint "ping") $ snd $
       serveLiveView
         (ServDeps sendMsg debugPrint)
         store
@@ -137,4 +137,5 @@ serveServantLiveView debugPrint basePage rootId store lv token =
         token
         where
           sendMsg = WS.sendTextData conn
-          incomingMsgs = S.repeatM (WS.receiveData conn)
+          incomingMsgs =
+            S.repeatM (WS.receiveData conn)
