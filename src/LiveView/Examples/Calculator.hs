@@ -13,6 +13,7 @@ import Data.String (fromString)
 import Data.Text qualified as T
 import Import
 import Lib
+import LiveView
 import LiveView.Html
 import LiveView.Serving
 import LiveView.Serving.Servant
@@ -26,16 +27,22 @@ import Text.Read
 
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
-sampleLiveView :: HtmlT (Reader (Float, Op, Float)) ()
+sampleLiveView :: LiveView (Float, Op, Float)
 sampleLiveView = do
   (x, op, y) <- ask
-  let onChangeX = makeHsaction "change" "change_x"
+  let parseVal (BindingCall mayVal) = do
+        rawVal <- mayVal
+        readMaybe (T.unpack rawVal)
+      addActionBindingForChange field = addActionBinding "change"
+        (\bc -> field %~ (\f -> fromMaybe f (parseVal bc)))
+  onChangeX <- addActionBindingForChange _1
+  onChangeOp <- addActionBindingForChange _2
+  onChangeY <- addActionBindingForChange _3
+
   input_ [value_ $ tshow x, hsaction_ onChangeX, type_ "number"]
-  let onChangeOp = makeHsaction "change" "change_op"
   select_ [hsaction_ onChangeOp] $ forM_ [Add, Subtract, Multiply, Divide] $ \op' ->
     option_ ([value_ $ tshow op'] ++ if op == op' then [selected_ "true"] else []) 
       $ fromString $ show op'
-  let onChangeY = makeHsaction "change" "change_y"
   input_ [value_ $ tshow y, hsaction_ onChangeY, type_ "number"]
   " = "
   let opFn = case op of
@@ -45,43 +52,27 @@ sampleLiveView = do
         Divide -> (/)
   input_ [value_ $ tshow (opFn x y), type_ "number", readonly_ "true"]
 
-reducer :: ActionCall -> State (Float, Op, Float) ()
-reducer (ActionCall action payload)
-  | action == "change_x" = _1 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
-  | action == "change_y" = _3 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
-  | action == "change_op" = _2 %= \s -> fromMaybe s (payload ^? ix "value" <&> T.unpack >>= readMaybe)
-  | otherwise = pure ()
-
 type API = LiveViewApi :<|> Raw
 
 api :: Proxy API
 api = Proxy
 
-server :: Server API
-server = serveLiveViewServant (do
-            let initS = (1, Add, 1)
-            stateChan <- liftIO STM.newTChanIO
-            currStateTV <- liftIO (STM.newTVarIO initS)
-            let stateStream = S.repeatM (atomically $ STM.readTChan stateChan)
-                actionCallback action = do
-                  Prelude.putStrLn "actionCallback"
-                  atomically $ do
-                    currState <- STM.readTVar currStateTV
-                    let nextState = execState (reducer action) currState
-                    STM.writeTChan stateChan nextState
-                    STM.writeTVar currStateTV nextState
-                  Prelude.putStrLn "actionCallback 2"
-                toHtml s = runReader (commuteHtmlT sampleLiveView) s
-            pure $ ServantDeps 
-              (toHtml initS) 
-              (S.map toHtml stateStream) 
-              (S.mapM_ actionCallback) 
-              (DefaultBasePage $ ScriptData 
-                { _liveViewScriptAbsolutePath = "/liveview.js"
-                , _wssUrlSpec = Ws
-                })
-              "lvroot"
-          ) :<|> serveDirectoryWebApp "static"
+server :: StateStore () (Float, Op, Float) -> Server API
+server store = (serveServantLiveView
+               putStrLn
+               (DefaultBasePage $ ScriptData
+               { _liveViewScriptAbsolutePath = "/liveview.js"
+               , _wssUrlSpec = Ws
+               })
+               "lvroot"
+               store
+               sampleLiveView
+               ()) :<|> serveDirectoryWebApp "static"
+
+initStateStore :: IO (StateStore () (Float, Op, Float))
+initStateStore = inMemoryStateStore (pure (1, Add, 1))
 
 main :: IO ()
-main = Warp.run 5000 (serve api server)
+main = do
+  store <- initStateStore
+  Warp.run 5000 (serve api (server store))

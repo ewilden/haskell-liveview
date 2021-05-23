@@ -69,7 +69,11 @@ defaultBasePage rootId (ScriptData liveViewScriptAbsolutePath wssUrlSpec) liveCo
             try {
               const currUrl = new URL(location.href);
               currUrl.protocol = "$scheme";
-              currUrl.pathname = currUrl.pathname + '/liveview';
+              let toAdd = '/liveview';
+              if (currUrl.pathname.endsWith('/')) {
+                toAdd = 'liveview';
+              }
+              currUrl.pathname = currUrl.pathname + toAdd;
               await attach(document.getElementById("$rootId"), currUrl);
             } catch (e) {
               console.err(e);
