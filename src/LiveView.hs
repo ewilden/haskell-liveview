@@ -12,10 +12,11 @@ import Control.Lens
 import Control.Lens qualified as L
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Monad.Writer.Strict (MonadWriter, Writer, WriterT, writer, runWriter)
-import Data.Aeson hiding ((.=), (.:))
+import Control.Monad.Writer.Strict (MonadWriter (tell), Writer, WriterT (runWriterT, WriterT), runWriter, writer, mapWriterT)
+import Data.Aeson hiding ((.:), (.=))
 import Data.Aeson.TH
 import Data.ByteString.Lazy qualified as BL
+import Data.Composition ((.:))
 import Data.HashMap.Monoidal (MonoidalHashMap)
 import Data.HashMap.Strict hiding (foldr, (!?))
 import Data.HashMap.Strict qualified as HM hiding (foldr)
@@ -33,12 +34,12 @@ import LiveView.Html
 import LiveView.Serving
 import Lucid (Html)
 import Lucid qualified as L
+import Lucid.Base (commuteHtmlT)
 import Lucid.Base qualified as L
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read (readMaybe)
-import Data.Composition ((.:))
 
 newtype WithAction m a = WithAction
   { runWithAction :: Writer (Action m) a
@@ -65,16 +66,21 @@ newtype BindingCall = BindingCall
   { _value :: Maybe T.Text
   }
 
-data BindingState state mutator = BindingState
-  { _actionBindings :: MonoidalIntMap [BindingCall -> mutator],
-    _bindingIdSeed :: Int
+newtype BindingState = BindingState
+  { _bindingIdSeed :: Int
   }
 
 makeClassy ''BindingState
 
-nullBindingState :: BindingState s a
-nullBindingState = BindingState mempty 1
+newtype BindingMap mutator = BindingMap
+  { _actionBindings :: MonoidalIntMap [BindingCall -> mutator]
+  }
+  deriving (Semigroup, Monoid, Functor)
 
+makeClassy ''BindingMap
+
+nullBindingState :: BindingState
+nullBindingState = BindingState 1
 
 data StateStore token mutator state = StateStore
   { _subscribeState :: token -> IO (state, Stream (Of state) IO ()),
@@ -83,6 +89,23 @@ data StateStore token mutator state = StateStore
   }
 
 makeClassy ''StateStore
+
+instance Profunctor (StateStore token) where
+  rmap f (StateStore sub mut del) =
+    StateStore
+      ( \tok -> do
+          (x, xs) <- sub tok
+          let x' = f x
+              xs' = S.map f xs
+          pure (x', xs')
+      )
+      mut
+      del
+  lmap f (StateStore sub mut del) =
+    StateStore
+      sub
+      (\tok mutr -> mut tok (f mutr))
+      del
 
 getOrInit :: (Eq k, Ord k, Hashable k) => STM.STM a -> k -> StmMap.Map k a -> STM.STM a
 getOrInit def k m = do
@@ -116,8 +139,12 @@ inMemoryStateStore mkState = do
         (s, wChan) <- getOrInitM mkStateWithChan token stmMap
         rChan <- atomically $ STM.dupTChan wChan
         pure (s, S.untilLeft $ STM.atomically (STM.readTChan rChan))
-      mutate :: forall a. IntoWithAction IO a state =>
-        k -> (state -> a) -> IO ()
+      mutate ::
+        forall a.
+        IntoWithAction IO a state =>
+        k ->
+        (state -> a) ->
+        IO ()
       mutate token f = do
         mayPair <- atomically $ StmMap.lookup token stmMap
         case mayPair of
@@ -143,7 +170,7 @@ newtype Renderer state mutator a = Renderer
   { runRenderer ::
       ReaderT
         state
-        (StateT (BindingState state mutator) IO)
+        (StateT BindingState (WriterT (BindingMap mutator) IO))
         a
   }
   deriving
@@ -151,9 +178,27 @@ newtype Renderer state mutator a = Renderer
       Applicative,
       Monad,
       MonadReader state,
-      MonadState (BindingState state mutator),
+      MonadState (BindingState),
+      MonadWriter (BindingMap mutator),
       MonadIO
     )
+
+newtype WrappedRenderer state mutator = WrappedRenderer
+  { unwrapRenderer :: Renderer state mutator ()
+  }
+
+instance Profunctor WrappedRenderer where
+  rmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $
+    Renderer $
+      ReaderT $ \r ->
+        let statT = runReaderT readT r
+         in StateT $ \s ->
+              let writT = runStateT statT s
+               in WriterT $ do
+                ((html, s'), bindMap) <- runWriterT writT
+                pure ((html, s'), f <$> bindMap)
+  lmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $ Renderer $
+    withReaderT f readT
 
 class (Monad m) => MonadRenderer state mutator m | m -> state, m -> mutator where
   liftRenderer :: Renderer state mutator a -> m a
@@ -169,6 +214,13 @@ instance
 
 type LiveView state mutator = L.HtmlT (Renderer state mutator) ()
 
+newtype WrappedLiveView state mutator = WrappedLiveView
+  { unwrapLiveView :: LiveView state mutator
+  }
+
+-- instance Profunctor WrappedLiveView where
+--   lmap f (WrappedLiveView x) =
+
 addActionBinding ::
   (MonadRenderer s mutator m) =>
   T.Text ->
@@ -176,7 +228,7 @@ addActionBinding ::
   m Hsaction
 addActionBinding event callback = liftRenderer $ do
   seed <- bindingIdSeed <<%= (+ 1)
-  actionBindings %= (<> MonoidalIntMap.singleton seed [callback])
+  tell $ BindingMap $ MonoidalIntMap.singleton seed [callback]
   pure $ makeHsaction event (tshow seed)
 
 data ServDeps = ServDeps
@@ -184,18 +236,29 @@ data ServDeps = ServDeps
     _sdDebugPrint :: String -> IO ()
   }
 
-runLiveView ::
+runLiveView :: forall state mutator.
   LiveView state mutator ->
   state ->
-  BindingState state mutator ->
-  IO (Html (), BindingState state mutator)
+  BindingState ->
+  IO ((Html (), BindingState), BindingMap mutator)
 runLiveView lv s bs =
-  L.commuteHtmlT lv
-    & runRenderer
-    & flip runReaderT s
-    & flip runStateT bs
+  let rendOfHtml :: Renderer state mutator (Html ())
+      rendOfHtml = L.commuteHtmlT lv
+      ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) IO)) (Html ())
+      ranRend = runRenderer rendOfHtml
+      stateT' :: StateT BindingState (WriterT (BindingMap mutator) IO) (Html ())
+      stateT' = runReaderT ranRend s
+      writerT' :: WriterT (BindingMap mutator) IO (Html (), BindingState)
+      writerT' = runStateT stateT' bs
+  in runWriterT writerT'
+  -- L.commuteHtmlT lv
+    -- & runRenderer
+    -- & flip runReaderT s
+    -- & flip runStateT bs
+    -- & flip runWriterT
 
-serveLiveView ::
+
+serveLiveView :: forall token mutator state.
   ServDeps ->
   StateStore token mutator state ->
   LiveView state mutator ->
@@ -207,13 +270,14 @@ serveLiveView deps store lv incomingMessages token =
   where
     init = do
       (initialState, _) <- _subscribeState store token
-      (initHtml, _) <- runLiveView lv initialState nullBindingState
+      ((initHtml, _), _) <- runLiveView lv initialState nullBindingState
       pure initHtml
     live = do
       (initialState, states) <- _subscribeState store token
-      (initHtml, initBs) <- runLiveView lv initialState nullBindingState
+      ((initHtml, initBs), bindMap) <- runLiveView lv initialState nullBindingState
       let initClock = Clock 0
-      ioref <- newIORef (initHtml, initBs, initClock, initialState)
+      (ioref :: IORef (Html (), BindingMap mutator, Clock, state))
+        <- newIORef (initHtml, bindMap, initClock, initialState)
       _sdSendSocketMessage deps $
         encode (("mount" :: T.Text, toSplitText initHtml), initClock)
       let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
@@ -221,20 +285,20 @@ serveLiveView deps store lv incomingMessages token =
         Left s -> do
           (h, _, c, _) <- readIORef ioref
           let c' = succ c
-          (h', bs') <- runLiveView lv s nullBindingState
+          ((h', _), bm') <- runLiveView lv s nullBindingState
           _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
-          writeIORef ioref (h', bs', c', s)
+          writeIORef ioref (h', bm', c', s)
         Right msg -> do
           case (decode msg :: Maybe (ActionCall, Clock)) of
             Nothing -> pure ()
             Just (call, callClock) -> do
-              (_, bs, clock, s) <- readIORef ioref
+              (_, bm, clock, s) <- readIORef ioref
               if callClock == clock
                 then do
                   let mayBSeed = readMaybe @Int (T.unpack $ _action call)
                       mayHandler = do
                         seed <- mayBSeed
-                        bs
+                        bm
                           ^? actionBindings
                             . to MonoidalIntMap.getMonoidalIntMap
                             . ix seed
