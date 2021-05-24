@@ -178,25 +178,19 @@ newtype Renderer state mutator a = Renderer
       Applicative,
       Monad,
       MonadReader state,
-      MonadState (BindingState),
+      MonadState BindingState,
       MonadWriter (BindingMap mutator),
       MonadIO
     )
 
-newtype WrappedRenderer state mutator = WrappedRenderer
-  { unwrapRenderer :: Renderer state mutator ()
+newtype WrappedRenderer a state mutator = WrappedRenderer
+  { unwrapRenderer :: Renderer state mutator a
   }
 
-instance Profunctor WrappedRenderer where
+instance Profunctor (WrappedRenderer a) where
   rmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $
-    Renderer $
-      ReaderT $ \r ->
-        let statT = runReaderT readT r
-         in StateT $ \s ->
-              let writT = runStateT statT s
-               in WriterT $ do
-                ((html, s'), bindMap) <- runWriterT writT
-                pure ((html, s'), f <$> bindMap)
+    Renderer $ hoist (hoist $ mapWriterT mapper) readT
+      where mapper x = fmap (fmap (fmap f)) x
   lmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $ Renderer $
     withReaderT f readT
 
@@ -218,8 +212,10 @@ newtype WrappedLiveView state mutator = WrappedLiveView
   { unwrapLiveView :: LiveView state mutator
   }
 
--- instance Profunctor WrappedLiveView where
---   lmap f (WrappedLiveView x) =
+instance Profunctor WrappedLiveView where
+  dimap f g (WrappedLiveView x) = WrappedLiveView $ hoist dimap' x
+    where dimap' = unwrapRenderer . dimap f g . WrappedRenderer
+
 
 addActionBinding ::
   (MonadRenderer s mutator m) =>
