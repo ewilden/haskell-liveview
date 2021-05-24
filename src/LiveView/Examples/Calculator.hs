@@ -59,7 +59,7 @@ type API = LiveViewApi :<|> Raw
 api :: Proxy API
 api = Proxy
 
-server :: StateStore () AppState (AppState -> WithAction IO AppState) -> Server API
+server :: StateStore () (AppState -> WithAction IO AppState) AppState -> Server API
 server store = (serveServantLiveView
                putStrLn
                (DefaultBasePage $ ScriptData
@@ -71,7 +71,7 @@ server store = (serveServantLiveView
                sampleLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
-initStateStore :: IO (StateStore () AppState (AppState -> WithAction IO AppState))
+initStateStore :: IO (StateStore () (AppState -> WithAction IO AppState) AppState)
 initStateStore = inMemoryStateStore (pure (1, Add, 1))
 
 main :: IO ()

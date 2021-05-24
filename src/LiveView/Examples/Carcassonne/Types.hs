@@ -79,12 +79,13 @@ data SessionState a = SessionState
   }
 
 newtype ServerContext = ServerContext
-  { _scStateStore :: StateStore SessionId AppContext
+  { _scStateStore :: StateStore SessionId
                       (AppContext -> WithAction IO AppContext)
+                      AppContext
   }
 
 makeClassy ''ServerContext
 
-instance HasStateStore ServerContext SessionId AppContext
-  (AppContext -> WithAction IO AppContext) where
+instance HasStateStore ServerContext SessionId
+  (AppContext -> WithAction IO AppContext) AppContext where
   stateStore = scStateStore

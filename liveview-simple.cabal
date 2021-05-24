@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bac54cd2a3fbfde0c3f9c851dbb490229347cb763fd06b4852a1586bb4d7cc9b
+-- hash: 317f3fc7792e59d90bf52ec174ae006646923a7b8db83845409bca00c9770802
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -102,6 +102,7 @@ library
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
     , servant
@@ -187,6 +188,7 @@ executable liveview-simple-exe
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
     , servant
@@ -273,6 +275,7 @@ test-suite liveview-simple-test
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
     , servant

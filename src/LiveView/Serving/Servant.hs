@@ -74,7 +74,7 @@ serveServantLiveView ::
   (String -> IO ()) ->
   BasePageSpec ->
   T.Text ->
-  StateStore token state mutator ->
+  StateStore token mutator state ->
   LiveView state mutator ->
   token ->
   Server LiveViewApi

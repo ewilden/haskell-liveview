@@ -23,6 +23,7 @@ import Data.Hashable
 import Data.IORef
 import Data.IntMap.Monoidal.Strict (MonoidalIntMap)
 import Data.IntMap.Monoidal.Strict qualified as MonoidalIntMap
+import Data.Profunctor
 import Data.Semigroup.Monad
 import Data.Text qualified as T
 import Data.Text.Lazy qualified as TL
@@ -75,7 +76,7 @@ nullBindingState :: BindingState s a
 nullBindingState = BindingState mempty 1
 
 
-data StateStore token state mutator = StateStore
+data StateStore token mutator state = StateStore
   { _subscribeState :: token -> IO (state, Stream (Of state) IO ()),
     _mutateState :: token -> mutator -> IO (),
     _deleteState :: token -> IO ()
@@ -106,7 +107,7 @@ inMemoryStateStore ::
   forall state k.
   (Eq k, Ord k, Hashable k) =>
   IO state ->
-  IO (StateStore k state (state -> WithAction IO state))
+  IO (StateStore k (state -> WithAction IO state) state)
 inMemoryStateStore mkState = do
   stmMap :: StmMap.Map k (state, STM.TChan (Either () state)) <- StmMap.newIO
   let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChanIO
@@ -196,7 +197,7 @@ runLiveView lv s bs =
 
 serveLiveView ::
   ServDeps ->
-  StateStore token state mutator ->
+  StateStore token mutator state ->
   LiveView state mutator ->
   Stream (Of BL.ByteString) IO () ->
   token ->

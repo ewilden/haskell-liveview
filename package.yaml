@@ -41,6 +41,7 @@ dependencies:
 - monoidal-containers
 - mtl >= 2.2.2 && < 3
 - neat-interpolation
+- profunctors
 - random
 - reducers
 - servant
