@@ -64,20 +64,20 @@ newtype BindingCall = BindingCall
   { _value :: Maybe T.Text
   }
 
-data BindingState state = BindingState
-  { _actionBindings :: MonoidalIntMap [BindingCall -> state -> WithAction IO state],
+data BindingState state mutator = BindingState
+  { _actionBindings :: MonoidalIntMap [BindingCall -> mutator],
     _bindingIdSeed :: Int
   }
 
 makeClassy ''BindingState
 
-nullBindingState :: BindingState s
+nullBindingState :: BindingState s a
 nullBindingState = BindingState mempty 1
 
 
-data StateStore token state = StateStore
+data StateStore token state mutator = StateStore
   { _subscribeState :: token -> IO (state, Stream (Of state) IO ()),
-    _mutateState :: forall a. IntoWithAction IO a state => token -> (state -> a) -> IO (),
+    _mutateState :: token -> mutator -> IO (),
     _deleteState :: token -> IO ()
   }
 
@@ -106,7 +106,7 @@ inMemoryStateStore ::
   forall state k.
   (Eq k, Ord k, Hashable k) =>
   IO state ->
-  IO (StateStore k state)
+  IO (StateStore k state (state -> WithAction IO state))
 inMemoryStateStore mkState = do
   stmMap :: StmMap.Map k (state, STM.TChan (Either () state)) <- StmMap.newIO
   let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChanIO
@@ -138,11 +138,11 @@ inMemoryStateStore mkState = do
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 
-newtype Renderer state a = Renderer
+newtype Renderer state mutator a = Renderer
   { runRenderer ::
       ReaderT
         state
-        (StateT (BindingState state) IO)
+        (StateT (BindingState state mutator) IO)
         a
   }
   deriving
@@ -150,32 +150,32 @@ newtype Renderer state a = Renderer
       Applicative,
       Monad,
       MonadReader state,
-      MonadState (BindingState state),
+      MonadState (BindingState state mutator),
       MonadIO
     )
 
-class (Monad m) => MonadRenderer state m | m -> state where
-  liftRenderer :: Renderer state a -> m a
+class (Monad m) => MonadRenderer state mutator m | m -> state, m -> mutator where
+  liftRenderer :: Renderer state mutator a -> m a
 
-instance MonadRenderer state (Renderer state) where
+instance MonadRenderer state mutator (Renderer state mutator) where
   liftRenderer = id
 
 instance
-  (Monad (t m), MonadRenderer state m, MonadTrans t) =>
-  MonadRenderer state (t m)
+  (Monad (t m), MonadRenderer state mutator m, MonadTrans t) =>
+  MonadRenderer state mutator (t m)
   where
   liftRenderer = lift . liftRenderer
 
-type LiveView state = L.HtmlT (Renderer state) ()
+type LiveView state mutator = L.HtmlT (Renderer state mutator) ()
 
 addActionBinding ::
-  (MonadRenderer s m, IntoWithAction IO a s) =>
+  (MonadRenderer s mutator m) =>
   T.Text ->
-  (BindingCall -> s -> a) ->
+  (BindingCall -> mutator) ->
   m Hsaction
 addActionBinding event callback = liftRenderer $ do
   seed <- bindingIdSeed <<%= (+ 1)
-  actionBindings %= (<> MonoidalIntMap.singleton seed [intoWithAction .: callback])
+  actionBindings %= (<> MonoidalIntMap.singleton seed [callback])
   pure $ makeHsaction event (tshow seed)
 
 data ServDeps = ServDeps
@@ -184,10 +184,10 @@ data ServDeps = ServDeps
   }
 
 runLiveView ::
-  LiveView state ->
+  LiveView state mutator ->
   state ->
-  BindingState state ->
-  IO (Html (), BindingState state)
+  BindingState state mutator ->
+  IO (Html (), BindingState state mutator)
 runLiveView lv s bs =
   L.commuteHtmlT lv
     & runRenderer
@@ -196,8 +196,8 @@ runLiveView lv s bs =
 
 serveLiveView ::
   ServDeps ->
-  StateStore token state ->
-  LiveView state ->
+  StateStore token state mutator ->
+  LiveView state mutator ->
   Stream (Of BL.ByteString) IO () ->
   token ->
   (IO (Html ()), IO ())
@@ -239,14 +239,5 @@ serveLiveView deps store lv incomingMessages token =
                             . ix seed
                   case mayHandler of
                     Nothing -> pure ()
-                    Just handlers ->
-                      let composedHandler =
-                            foldr
-                              (<=<)
-                              pure
-                              ( fmap
-                                  ($ BindingCall (_payload call ^? ix "value"))
-                                  handlers
-                              )
-                       in _mutateState store token composedHandler
+                    Just handlers -> forM_ handlers (_mutateState store token . ($ BindingCall (_payload call ^? ix "value")))
                 else _sdDebugPrint deps $ "No matching handler for " <> show msg

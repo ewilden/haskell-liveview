@@ -74,8 +74,8 @@ serveServantLiveView ::
   (String -> IO ()) ->
   BasePageSpec ->
   T.Text ->
-  StateStore token state ->
-  LiveView state ->
+  StateStore token state mutator ->
+  LiveView state mutator ->
   token ->
   Server LiveViewApi
 serveServantLiveView debugPrint basePage rootId store lv token =

@@ -34,6 +34,7 @@ import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
 import Data.Hashable (Hashable)
+import Data.Composition ((.:))
 
 sampleAppContext :: AppContext
 sampleAppContext = AppContext
@@ -46,7 +47,7 @@ sampleAppContext = AppContext
   , _sessionId = "sampleAppContext"
   }
 
-liveView :: LiveView AppContext
+liveView :: LiveView AppContext (AppContext -> WithAction IO AppContext)
 liveView = do
   link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
   tileList <- view (gameState . gameTiles)
@@ -69,9 +70,9 @@ liveView = do
       div_ [class_ "current-turn"] $ do
         renderTile currTile ["current-tile"]
         rotLeft <- addActionBinding "click"
-          (\_ -> gameTiles . ix 0 %~ rotateCcw)
+          (\_ -> (intoWithAction .) $ gameTiles . ix 0 %~ rotateCcw)
         rotRight <- addActionBinding "click"
-          (\_ -> gameTiles . ix 0 %~ rotateCw)
+          (\_ -> (intoWithAction .) $ gameTiles . ix 0 %~ rotateCw)
         button_ [hsaction_ rotLeft] "rotate left"
         button_ [hsaction_ rotRight] "rotate right"
 
@@ -91,7 +92,7 @@ initAppContext = do
   pure $ sampleAppContext & gameTiles .~ initialTiles
 
 server' :: ServerContext -> Server API
-server' servCtxt = (\sessId -> serveServantLiveView
+server' servCtxt = (serveServantLiveView
                    putStrLn
                    (DefaultBasePage $ ScriptData
                     { _liveViewScriptAbsolutePath = "/liveview.js"
@@ -99,8 +100,7 @@ server' servCtxt = (\sessId -> serveServantLiveView
                     })
                    "lvroot"
                    (servCtxt ^. stateStore)
-                   liveView
-                   (SessionId sessId)) :<|> serveDirectoryWebApp "static"
+                   liveView . SessionId) :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
 main = do
