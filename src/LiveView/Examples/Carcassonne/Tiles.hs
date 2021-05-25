@@ -130,7 +130,7 @@ canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
         | otherwise = False
    in hasNbr && (all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse)))
 
-renderBoard' :: forall r. (HasAppContext r) => LiveView r (r -> WithAction IO r)
+renderBoard' :: forall r. (HasAppContext r) => LiveView r (r -> r)
 renderBoard' = do
   board' <- view (appContext . gameState . board)
   mayCurrTile <- asks (\s -> s ^? appContext . gameState . gameTiles . ix 0)
@@ -152,7 +152,7 @@ renderBoard' = do
             (x, y - 1)
         where
           f loc = board' ^? xyToTile . ix loc
-      renderSpot :: (Int, Int) -> LiveView r (r -> WithAction IO r)
+      renderSpot :: (Int, Int) -> LiveView r (r -> r)
       renderSpot loc@(x, y) =
         let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2]
          in div_
@@ -171,7 +171,7 @@ renderBoard' = do
                         Just
                           <$> addActionBinding
                             "click"
-                            ( \_ r -> intoWithAction $
+                            ( \_ r ->
                                 r & appContext . gameTiles %~ drop 1
                                   & appContext . gameBoard . xyToTile . at (x, y) ?~ currTile
                             )

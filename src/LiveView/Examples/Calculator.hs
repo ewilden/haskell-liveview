@@ -29,14 +29,14 @@ data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
 type AppState = (Float, Op, Float)
 
-sampleLiveView :: LiveView AppState (AppState -> WithAction IO AppState)
+sampleLiveView :: LiveView AppState (AppState -> AppState)
 sampleLiveView = do
   (x, op, y) <- ask
   let parseVal (BindingCall mayVal) = do
         rawVal <- mayVal
         readMaybe (T.unpack rawVal)
       addActionBindingForChange field = addActionBinding "change"
-        (\bc -> (intoWithAction .) $ field %~ (\f -> fromMaybe f (parseVal bc)))
+        (\bc -> field %~ (\f -> fromMaybe f (parseVal bc)))
   onChangeX <- addActionBindingForChange _1
   onChangeOp <- addActionBindingForChange _2
   onChangeY <- addActionBindingForChange _3
@@ -59,7 +59,7 @@ type API = LiveViewApi :<|> Raw
 api :: Proxy API
 api = Proxy
 
-server :: StateStore () (AppState -> WithAction IO AppState) AppState -> Server API
+server :: StateStore () (AppState -> AppState) AppState -> Server API
 server store = (serveServantLiveView
                putStrLn
                (DefaultBasePage $ ScriptData
@@ -71,8 +71,10 @@ server store = (serveServantLiveView
                sampleLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
-initStateStore :: IO (StateStore () (AppState -> WithAction IO AppState) AppState)
-initStateStore = inMemoryStateStore (pure (1, Add, 1))
+initStateStore :: IO (StateStore () (AppState -> AppState) AppState)
+initStateStore = lmap mapper <$> inMemoryStateStore (pure (1, Add, 1))
+  where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
+        mapper = (intoWithAction . )
 
 main :: IO ()
 main = do

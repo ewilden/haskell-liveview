@@ -47,7 +47,7 @@ sampleAppContext = AppContext
   , _sessionId = "sampleAppContext"
   }
 
-liveView :: LiveView AppContext (AppContext -> WithAction IO AppContext)
+liveView :: LiveView AppContext (AppContext -> AppContext)
 liveView = do
   link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
   tileList <- view (gameState . gameTiles)
@@ -70,9 +70,9 @@ liveView = do
       div_ [class_ "current-turn"] $ do
         renderTile currTile ["current-tile"]
         rotLeft <- addActionBinding "click"
-          (\_ -> (intoWithAction .) $ gameTiles . ix 0 %~ rotateCcw)
+          (\_ -> gameTiles . ix 0 %~ rotateCcw)
         rotRight <- addActionBinding "click"
-          (\_ -> (intoWithAction .) $ gameTiles . ix 0 %~ rotateCw)
+          (\_ -> gameTiles . ix 0 %~ rotateCw)
         button_ [hsaction_ rotLeft] "rotate left"
         button_ [hsaction_ rotRight] "rotate right"
 
@@ -84,7 +84,8 @@ api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
 initServerContext = do
-  liftIO $ ServerContext <$> inMemoryStateStore initAppContext
+  liftIO $ ServerContext <$>
+    (lmap (intoWithAction . ) <$> inMemoryStateStore initAppContext)
 
 initAppContext :: (MonadIO m) => m AppContext
 initAppContext = do
