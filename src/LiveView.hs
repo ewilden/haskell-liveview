@@ -216,6 +216,21 @@ instance Profunctor WrappedLiveView where
   dimap f g (WrappedLiveView x) = WrappedLiveView $ hoist dimap' x
     where dimap' = unwrapRenderer . dimap f g . WrappedRenderer
 
+dimapLiveView
+  :: (state -> b)
+     -> (c -> mutator) -> LiveView b c -> LiveView state mutator
+dimapLiveView f g = unwrapLiveView . dimap f g . WrappedLiveView
+
+zoomLiveView :: Lens' b a -> LiveView a (a -> a) -> LiveView b (b -> b)
+zoomLiveView l = dimapLiveView (^. l) (l %~)
+
+fromSettingMutator :: LiveView a b -> LiveView a (c -> b)
+fromSettingMutator = dimapLiveView id const
+
+toSettingMutator :: LiveView a (a -> b) -> LiveView a b
+toSettingMutator lv = do
+  a <- ask
+  dimapLiveView id ($ a) lv
 
 addActionBinding ::
   (MonadRenderer s mutator m) =>
