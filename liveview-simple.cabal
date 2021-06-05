@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 317f3fc7792e59d90bf52ec174ae006646923a7b8db83845409bca00c9770802
+-- hash: 7106e1802fb3b730eb80ab3c4f74b0d80966e099fe4712a4763383ad32d75bc9
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       LiveView
       LiveView.Examples.Calculator
       LiveView.Examples.Carcassonne
+      LiveView.Examples.Carcassonne.Reducer
       LiveView.Examples.Carcassonne.Tiles
       LiveView.Examples.Carcassonne.Types
       LiveView.Fixtures
@@ -105,6 +106,7 @@ library
     , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
     , servant-lucid
     , servant-server
@@ -191,6 +193,7 @@ executable liveview-simple-exe
     , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
     , servant-lucid
     , servant-server
@@ -278,6 +281,7 @@ test-suite liveview-simple-test
     , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
     , servant-lucid
     , servant-server

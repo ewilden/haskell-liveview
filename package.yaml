@@ -44,6 +44,7 @@ dependencies:
 - profunctors
 - random
 - reducers
+- semigroupoids
 - servant
 - servant-lucid
 - servant-server

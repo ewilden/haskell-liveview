@@ -28,7 +28,8 @@ import System.Random
 import System.Random.Stateful
 
 ts :: Text -> (SideTerrain, SideTerrain, SideTerrain, SideTerrain) -> MiddleTerrain -> Int -> (Tile, Int)
-ts t sides middle frequency = (Tile (fromTuple sides) middle (TileImage t 0), frequency)
+ts t sides middle frequency =
+  (Tile (fromTuple sides) middle (TileImage t 0) Nothing, frequency)
   where
     fromTuple (u, r, d, l) = LRUD l r u d
 
@@ -71,10 +72,13 @@ unshuffledTiles = do
   replicate n tile
 
 startingTile :: Tile
-startingTile = Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0)
+startingTile =
+  Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0) Nothing
 
 rotateCcw :: Tile -> Tile
-rotateCcw (Tile (LRUD l r u d) middle image) = Tile (LRUD u d r l) middle (rotateImageCcw image)
+rotateCcw (Tile (LRUD l r u d) middle image mplPlace) =
+  Tile (LRUD u d r l) middle (rotateImageCcw image)
+    (mplPlace & _Just . _1 . _PlaceSide %~ rotateLRUDOneCcw)
 
 rotateImageCcw :: TileImage -> TileImage
 rotateImageCcw image = image & imageCcwRotates %~ (\x -> (x + 1) `mod` 4)
