@@ -4,6 +4,7 @@
 
 module LiveView.Examples.Carcassonne.Reducer where
 
+import Algebra.Graph
 import Control.Concurrent.Async qualified as Async
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM qualified as STM
@@ -36,7 +37,6 @@ import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
 
-
 initGameState :: (MonadIO m) => NumPlayers -> m GameState
 initGameState numPlayers = do
   initialTiles <- liftIO $ shuffle unshuffledTiles
@@ -55,9 +55,68 @@ initAppContext = do
   pure $
     AppContext
       { _makeTileImageUrl = \(TileImage name ccwRotates) ->
-          let suffix = case ccwRotates of
+          let suffix = case ccwRotates `mod` 4 of
                 0 -> ""
-                _ -> let r = tshow ccwRotates in "-" <> r
+                n -> "-" <> tshow n
            in [txt|/tiles/${name}50${suffix}.jpg|],
         _acGameState = gameState
       }
+
+-- data Message
+--   = CurrentTileRotateRight
+--   | CurrentTileRotateLeft
+--   | PlaceTile (Int, Int)
+--   | PlaceMeeple (Int, Int) (Maybe MeeplePlacement)
+--   | TakeMeeple (Maybe (Int, Int))
+
+terrainNeighborhood ::
+  (HasBoard b) => SideTerrain -> TerrainGraphKey -> b -> [TerrainGraphKey]
+terrainNeighborhood terrain key board =
+  let loc = key ^. keyLoc
+      nbrs = tileNeighborhood loc board
+      nbrSides = facingSides nbrs
+      toMayKey loc' maySide lrudOne =
+        if maySide == Just terrain
+          then
+            Just $
+              TerrainGraphKey
+                { _keyLoc = loc',
+                  _keySide = lrudOne
+                }
+          else Nothing
+   in catMaybes $
+        ( toMayKey
+            <$> (lrudNeighbors <*> pure loc)
+            <*> nbrSides
+            <*> (flipLRUDOne <$> lrudOnes)
+        )
+          ^.. traverse
+
+buildTerrainGraph :: SideTerrain -> GameState -> Graph TerrainGraphKey
+buildTerrainGraph terrain gs = HM.foldlWithKey' folder empty (gs ^. xyToTile)
+  where
+    folder graph loc tile = overlay graph graph'
+    graph' = undefined
+
+reducer :: Message -> GameState -> GameState
+reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
+reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
+reducer (PlaceTile loc) = \gs ->
+  let currTile = gs ^?! gameTiles . ix 0
+   in gs & gameTiles %~ drop 1
+        & gameBoard . xyToTile . at loc ?~ currTile
+        & gameWhoseTurn . whoseTurnPhase %~ succ
+reducer (PlaceMeeple loc mplc) = \gs ->
+  let currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
+   in gs
+        & gameBoard . xyToTile . ix loc
+          . tileMeeplePlacement
+          .~ ((,currPlayer) <$> mplc)
+        & collectAndScoreMeeples
+        & gameWhoseTurn . whoseTurnPhase %~ succ
+reducer (TakeAbbot mayLoc) = case mayLoc of
+  Nothing -> id
+  Just _ -> error "TODO: implement this"
+
+collectAndScoreMeeples :: GameState -> GameState
+collectAndScoreMeeples = undefined

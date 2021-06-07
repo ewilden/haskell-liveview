@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7106e1802fb3b730eb80ab3c4f74b0d80966e099fe4712a4763383ad32d75bc9
+-- hash: df280eda15b320d3cbae112043d27c397aeda73b869674b7832176eae9ebb900
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -88,6 +88,7 @@ library
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring
@@ -174,6 +175,7 @@ executable liveview-simple-exe
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring
@@ -262,6 +264,7 @@ test-suite liveview-simple-test
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring

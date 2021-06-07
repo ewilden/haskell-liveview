@@ -25,6 +25,7 @@ dependencies:
 - aeson >= 1.5.5.1 && < 2
 # - aeson-diff >= 1.1.0.7 && < 2
 - aeson-qq >= 0.8.3 && < 1
+- algebraic-graphs
 - async
 - bytestring
 - composition >= 1.0.2.1 && < 2

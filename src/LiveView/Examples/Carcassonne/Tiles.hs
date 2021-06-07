@@ -115,14 +115,18 @@ f ?|| as = f (as >>= id)
 infixr 2 ?||
 
 facingSides :: LRUD (Maybe Tile) -> LRUD (Maybe SideTerrain)
-facingSides (LRUD nbrL nbrR nbrU nbrD) =
-  LRUD
-    (f nbrL lrudR)
-    (f nbrR lrudL)
-    (f nbrU lrudD)
-    (f nbrD lrudU)
-  where
-    f nbr sideL = nbr ^? _Just . sides . sideL
+facingSides tileNeighbors =
+  let facingLenses = lrudOnes <&> flipLRUDOne <&> toLRUDLens
+  in (\nbr sideL -> nbr ^? _Just . sides . sideL)
+     <$> tileNeighbors <*> facingLenses
+-- facingSides (LRUD nbrL nbrR nbrU nbrD) =
+--   LRUD
+--     (f nbrL lrudR)
+--     (f nbrR lrudL)
+--     (f nbrU lrudD)
+--     (f nbrD lrudU)
+--   where
+--     f nbr sideL = nbr ^? _Just . sides . sideL
 
 canPlace :: Tile -> LRUD (Maybe Tile) -> Bool
 canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
@@ -133,6 +137,17 @@ canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
         | theirSide == Just mySide = True
         | otherwise = False
    in hasNbr && (all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse)))
+
+tileNeighborhood :: (HasBoard b) => (Int, Int) -> b -> LRUD (Maybe Tile)
+tileNeighborhood loc b = f <$> (lrudNeighbors <*> pure loc)
+  where f loc = b ^? xyToTile . ix loc
+
+lrudNeighbors :: LRUD ((Int, Int) -> (Int, Int))
+lrudNeighbors = LRUD
+  (_1 -~ 1)
+  (_1 +~ 1)
+  (_2 +~ 1)
+  (_2 -~ 1)
 
 renderBoard' :: forall r. (HasAppContext r) => LiveView r (r -> r)
 renderBoard' = do
