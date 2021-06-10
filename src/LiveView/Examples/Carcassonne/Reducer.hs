@@ -82,6 +82,10 @@ terrainEdges terrain loc board =
   let tile = board ^?! xyToTile . ix loc
       nbrs = tileNeighborhood loc board
       nbrSides = facingSidesWithIsTerminus nbrs
+      -- Hmm. I started storing amITerm in the graph key,
+      -- but that might not have been what I planned to do with it.
+      -- Instead I think I was planning on using it to decide whether
+      -- to add edges between sides of the same tile.
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
         Just (terrain', isNbrTerm) ->
           if terrain' /= terrain
