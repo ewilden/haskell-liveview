@@ -77,7 +77,10 @@ startingTile =
 
 rotateCcw :: Tile -> Tile
 rotateCcw (Tile (LRUD l r u d) middle image mplPlace) =
-  Tile (LRUD u d r l) middle (rotateImageCcw image)
+  Tile
+    (LRUD u d r l)
+    middle
+    (rotateImageCcw image)
     (mplPlace & _Just . _1 . _PlaceSide %~ rotateLRUDOneCcw)
 
 rotateImageCcw :: TileImage -> TileImage
@@ -114,11 +117,35 @@ f ?|| as = f (as >>= id)
 
 infixr 2 ?||
 
+isMCity :: MiddleTerrain -> Bool
+isMCity (MCity _) = True
+isMCity _ = False
+
+sidesWithIsTerminus :: Tile -> LRUD (SideTerrain, Bool)
+sidesWithIsTerminus tile =
+  let terrainCount :: SideTerrain -> Int
+      terrainCount terrain = length $ filter (== terrain) $ tile ^.. sides . traverse
+      terrainToIsTerminus :: SideTerrain -> Bool
+      terrainToIsTerminus = \case
+        City -> not $ isMCity $ tile ^. middle
+        Road -> terrainCount Road /= 2
+        _ -> False
+   in (\t -> (t, terrainToIsTerminus t)) <$> tile ^. sides
+
+facingSidesWithIsTerminus :: LRUD (Maybe Tile) -> LRUD (Maybe (SideTerrain, Bool))
+facingSidesWithIsTerminus tileNeighbors =
+  let facingLenses = lrudOnes <&> flipLRUDOne <&> toLRUDLens
+      mkPair mayNbr sideL = do
+        nbr <- mayNbr
+        pure $ sidesWithIsTerminus nbr ^. sideL
+   in mkPair <$> tileNeighbors <*> facingLenses
+
 facingSides :: LRUD (Maybe Tile) -> LRUD (Maybe SideTerrain)
 facingSides tileNeighbors =
   let facingLenses = lrudOnes <&> flipLRUDOne <&> toLRUDLens
-  in (\nbr sideL -> nbr ^? _Just . sides . sideL)
-     <$> tileNeighbors <*> facingLenses
+   in (\nbr sideL -> nbr ^? _Just . sides . sideL)
+        <$> tileNeighbors <*> facingLenses
+
 -- facingSides (LRUD nbrL nbrR nbrU nbrD) =
 --   LRUD
 --     (f nbrL lrudR)
@@ -140,14 +167,16 @@ canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
 
 tileNeighborhood :: (HasBoard b) => (Int, Int) -> b -> LRUD (Maybe Tile)
 tileNeighborhood loc b = f <$> (lrudNeighbors <*> pure loc)
-  where f loc = b ^? xyToTile . ix loc
+  where
+    f loc = b ^? xyToTile . ix loc
 
 lrudNeighbors :: LRUD ((Int, Int) -> (Int, Int))
-lrudNeighbors = LRUD
-  (_1 -~ 1)
-  (_1 +~ 1)
-  (_2 +~ 1)
-  (_2 -~ 1)
+lrudNeighbors =
+  LRUD
+    (_1 -~ 1)
+    (_1 +~ 1)
+    (_2 +~ 1)
+    (_2 -~ 1)
 
 renderBoard' :: forall r. (HasAppContext r) => LiveView r (r -> r)
 renderBoard' = do

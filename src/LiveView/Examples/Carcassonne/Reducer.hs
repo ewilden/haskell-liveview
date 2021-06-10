@@ -4,7 +4,9 @@
 
 module LiveView.Examples.Carcassonne.Reducer where
 
-import Algebra.Graph
+import Algebra.Graph.AdjacencyMap.Algorithm
+import Algebra.Graph.ToGraph (ToGraph (toAdjacencyMap))
+import Algebra.Graph.Undirected qualified as Undirected
 import Control.Concurrent.Async qualified as Async
 import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM qualified as STM
@@ -18,6 +20,7 @@ import Data.HashMap.Strict qualified as HM
 import Data.Hashable (Hashable)
 import Data.String (fromString)
 import Data.Text qualified as T
+import Data.Tuple.Extra (swap)
 import Focus qualified
 import Import
 import Lib
@@ -69,34 +72,48 @@ initAppContext = do
 --   | PlaceMeeple (Int, Int) (Maybe MeeplePlacement)
 --   | TakeMeeple (Maybe (Int, Int))
 
-terrainNeighborhood ::
-  (HasBoard b) => SideTerrain -> TerrainGraphKey -> b -> [TerrainGraphKey]
-terrainNeighborhood terrain key board =
-  let loc = key ^. keyLoc
+terrainEdges ::
+  (HasBoard b) =>
+  SideTerrain ->
+  (Int, Int) ->
+  b ->
+  [(TerrainGraphKey, TerrainGraphKey)]
+terrainEdges terrain loc board =
+  let tile = board ^?! xyToTile . ix loc
       nbrs = tileNeighborhood loc board
-      nbrSides = facingSides nbrs
-      toMayKey loc' maySide lrudOne =
-        if maySide == Just terrain
-          then
-            Just $
-              TerrainGraphKey
-                { _keyLoc = loc',
-                  _keySide = lrudOne
-                }
-          else Nothing
+      nbrSides = facingSidesWithIsTerminus nbrs
+      toMayEdge loc' maySide lrudOne amITerm = case maySide of
+        Just (terrain', isNbrTerm) ->
+          if terrain' /= terrain
+            then error "impossible: different terrains neighboring"
+            else
+              Just
+                ( TerrainGraphKey loc lrudOne amITerm,
+                  TerrainGraphKey loc' (flipLRUDOne lrudOne) isNbrTerm
+                )
+        Nothing ->
+          Just
+            ( TerrainGraphKey loc lrudOne amITerm,
+              TerrainEmptyKey
+            )
    in catMaybes $
-        ( toMayKey
+        ( toMayEdge
             <$> (lrudNeighbors <*> pure loc)
             <*> nbrSides
-            <*> (flipLRUDOne <$> lrudOnes)
+            <*> lrudOnes
+            <*> (snd <$> sidesWithIsTerminus tile)
         )
           ^.. traverse
 
-buildTerrainGraph :: SideTerrain -> GameState -> Graph TerrainGraphKey
-buildTerrainGraph terrain gs = HM.foldlWithKey' folder empty (gs ^. xyToTile)
+buildTerrainGraph :: SideTerrain -> GameState -> Undirected.Graph TerrainGraphKey
+buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. xyToTile)
   where
-    folder graph loc tile = overlay graph graph'
-    graph' = undefined
+    folder graph loc tile = Undirected.overlay graph (graph' loc)
+    graph' loc =
+      let edgesToAdd = terrainEdges terrain loc gs
+       in Undirected.edges edgesToAdd
+
+-- getAdjMap loc = toAdjacencyMap (fromUndirected $ graph' loc)
 
 reducer :: Message -> GameState -> GameState
 reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw

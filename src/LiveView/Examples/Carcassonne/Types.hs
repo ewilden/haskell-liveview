@@ -119,8 +119,9 @@ makeClassy ''Board
 
 data TerrainGraphKey = TerrainGraphKey
   { _keyLoc :: (Int, Int),
-    _keySide :: LRUDOne
-  }
+    _keySide :: LRUDOne,
+    _keyIsTerminus :: Bool
+  } | TerrainEmptyKey
   deriving (Show, Eq, Ord)
 
 makeClassy ''TerrainGraphKey
