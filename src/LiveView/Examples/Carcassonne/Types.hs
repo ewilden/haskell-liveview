@@ -119,12 +119,11 @@ makeClassy ''Board
 
 data TerrainGraphKey = TerrainGraphKey
   { _keyLoc :: (Int, Int),
-    _keySide :: LRUDOne,
-    _keyIsTerminus :: Bool
+    _keySide :: LRUDOne
   } | TerrainEmptyKey
   deriving (Show, Eq, Ord)
 
-makeClassy ''TerrainGraphKey
+makeClassyPrisms ''TerrainGraphKey
 
 data TurnPhase = PhaseTile | PhasePlaceMeeple | PhaseTakeAbbot
   deriving (Eq, Ord, Enum, Bounded)

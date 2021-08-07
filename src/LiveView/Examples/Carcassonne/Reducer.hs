@@ -4,7 +4,9 @@
 
 module LiveView.Examples.Carcassonne.Reducer where
 
+import Algebra.Graph.AdjacencyMap
 import Algebra.Graph.AdjacencyMap.Algorithm
+import Algebra.Graph.NonEmpty.AdjacencyMap (fromNonEmpty)
 import Algebra.Graph.ToGraph (ToGraph (toAdjacencyMap))
 import Algebra.Graph.Undirected qualified as Undirected
 import Control.Concurrent.Async qualified as Async
@@ -39,6 +41,7 @@ import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
+import qualified Data.Bifunctor
 
 initGameState :: (MonadIO m) => NumPlayers -> m GameState
 initGameState numPlayers = do
@@ -81,33 +84,48 @@ terrainEdges ::
 terrainEdges terrain loc board =
   let tile = board ^?! xyToTile . ix loc
       nbrs = tileNeighborhood loc board
-      nbrSides = facingSidesWithIsTerminus nbrs
-      -- Hmm. I started storing amITerm in the graph key,
-      -- but that might not have been what I planned to do with it.
-      -- Instead I think I was planning on using it to decide whether
-      -- to add edges between sides of the same tile.
+      nbrSides = facingSides nbrs
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
-        Just (terrain', isNbrTerm) ->
+        Just terrain' ->
           if terrain' /= terrain
             then error "impossible: different terrains neighboring"
             else
               Just
-                ( TerrainGraphKey loc lrudOne amITerm,
-                  TerrainGraphKey loc' (flipLRUDOne lrudOne) isNbrTerm
+                ( TerrainGraphKey loc lrudOne,
+                  TerrainGraphKey loc' (flipLRUDOne lrudOne)
                 )
         Nothing ->
           Just
-            ( TerrainGraphKey loc lrudOne amITerm,
+            ( TerrainGraphKey loc lrudOne,
               TerrainEmptyKey
             )
-   in catMaybes $
-        ( toMayEdge
-            <$> (lrudNeighbors <*> pure loc)
-            <*> nbrSides
-            <*> lrudOnes
-            <*> (snd <$> sidesWithIsTerminus tile)
-        )
-          ^.. traverse
+      edgesToNbrs =
+        catMaybes $
+          ( toMayEdge
+              <$> (lrudNeighbors <*> pure loc)
+              <*> nbrSides
+              <*> lrudOnes
+              <*> (snd <$> sidesWithIsTerminus tile)
+          )
+            ^.. traverse
+      hasInternalEdges =
+        (> 0) $
+          length $
+            filter snd $
+              sidesWithIsTerminus tile ^.. traverse
+      applicableSides =
+        filter
+          (\s -> terrain == tile ^. sides . (toLRUDLens s))
+          (lrudOnes ^.. traverse)
+      internalEdges =
+        if hasInternalEdges
+          then do
+            s <- applicableSides
+            s' <- applicableSides
+            guard (s /= s')
+            [(TerrainGraphKey loc s, TerrainGraphKey loc s')]
+          else []
+   in edgesToNbrs <> internalEdges
 
 buildTerrainGraph :: SideTerrain -> GameState -> Undirected.Graph TerrainGraphKey
 buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. xyToTile)
@@ -117,9 +135,37 @@ buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. x
       let edgesToAdd = terrainEdges terrain loc gs
        in Undirected.edges edgesToAdd
 
--- getAdjMap loc = toAdjacencyMap (fromUndirected $ graph' loc)
+terrainCompleteComponents :: SideTerrain -> GameState -> [[TerrainGraphKey]]
+terrainCompleteComponents terrain gs =
+  let terrainAdjMap =
+        toAdjacencyMap
+          (Undirected.fromUndirected $ buildTerrainGraph terrain gs)
+      comps = vertexList $ scc terrainAdjMap
+   in comps <&> fromNonEmpty
+        & filter (not . hasVertex TerrainEmptyKey) <&> vertexList
 
-reducer :: Message -> GameState -> GameState
+-- For a given TerrainGraphKey returns the player owning a meeple on that
+-- terrain/side, if any.
+-- Note that this only handles non-Monastery terrains.
+collectPlacedMeeple' :: TerrainGraphKey -> GameState -> (Maybe PlayerIndex, GameState)
+collectPlacedMeeple' TerrainEmptyKey gs = (Nothing, gs)
+collectPlacedMeeple' (TerrainGraphKey loc side) gs =
+  maybe (Nothing, gs) (Data.Bifunctor.first Just) $ do
+   tile <- gs ^? xyToTile . ix loc
+   (placement, playerInd) <- tile ^. tileMeeplePlacement
+   case placement of
+     PlaceSide side'
+       | side == side' -> Just (playerInd, gs & xyToTile . ix loc . tileMeeplePlacement .~ Nothing)
+       | otherwise -> Nothing
+     PlaceMonastery -> Nothing
+
+collectPlacedMeeple :: TerrainGraphKey -> State GameState (Maybe PlayerIndex)
+collectPlacedMeeple key = state $ collectPlacedMeeple' key
+
+collectAndScoreMeeples :: GameState -> GameState
+collectAndScoreMeeples = execState $ do
+  pure ()
+
 reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
 reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
 reducer (PlaceTile loc) = \gs ->
@@ -139,5 +185,3 @@ reducer (TakeAbbot mayLoc) = case mayLoc of
   Nothing -> id
   Just _ -> error "TODO: implement this"
 
-collectAndScoreMeeples :: GameState -> GameState
-collectAndScoreMeeples = undefined
