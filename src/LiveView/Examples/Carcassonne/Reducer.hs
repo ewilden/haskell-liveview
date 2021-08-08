@@ -20,6 +20,9 @@ import Data.Composition ((.:))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.Hashable (Hashable)
+import Data.HashMap.Monoidal qualified as MHM
+import Data.List.Extra (groupSort, genericLength)
+import Data.Semigroup (Sum(..), Max(..))
 import Data.String (fromString)
 import Data.Text qualified as T
 import Data.Tuple.Extra (swap)
@@ -38,8 +41,6 @@ import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
 import StmContainers.Map qualified as StmMap
-import Streaming
-import Streaming.Prelude qualified as S
 import Text.Read
 import qualified Data.Bifunctor
 
@@ -155,16 +156,34 @@ collectPlacedMeeple' (TerrainGraphKey loc side) gs =
    (placement, playerInd) <- tile ^. tileMeeplePlacement
    case placement of
      PlaceSide side'
-       | side == side' -> Just (playerInd, gs & xyToTile . ix loc . tileMeeplePlacement .~ Nothing)
+       | side == side' -> Just (playerInd,
+                                gs & xyToTile . ix loc . tileMeeplePlacement .~ Nothing)
        | otherwise -> Nothing
      PlaceMonastery -> Nothing
 
 collectPlacedMeeple :: TerrainGraphKey -> State GameState (Maybe PlayerIndex)
 collectPlacedMeeple key = state $ collectPlacedMeeple' key
 
+data ScorableTerrain = ScoreCity | ScoreRoad
+
+intoTerrain :: ScorableTerrain -> SideTerrain
+intoTerrain ScoreCity = City
+intoTerrain ScoreRoad = Road
+
 collectAndScoreMeeples :: GameState -> GameState
 collectAndScoreMeeples = execState $ do
-  pure ()
+  forM_ [ScoreCity, ScoreRoad] $ \terrain -> do
+    doneComps <- gets $ terrainCompleteComponents $ intoTerrain terrain
+    forM_ doneComps $ \keyList -> do
+      mayPlayerInds <- mapM collectPlacedMeeple keyList
+      let playerInds = catMaybes mayPlayerInds
+          playerIndsAndCounts = MHM.toList $ foldMap (\i -> MHM.singleton i (Sum 1 :: Sum Int)) playerInds
+          winners = maybe [] snd $ (^? ix 0) $ groupSort $ (\(i, Sum c) -> (Max c, i)) <$> playerIndsAndCounts
+          multiplier = case terrain of
+            ScoreCity -> 2
+            ScoreRoad -> 1
+      forM_ winners $ \playerInd -> do
+        gameScores . ix playerInd += Score (multiplier * genericLength keyList)
 
 reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
 reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
