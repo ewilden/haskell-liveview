@@ -53,7 +53,8 @@ initGameState numPlayers = do
         _gameTiles = initialTiles,
         _gameNumPlayers = numPlayers,
         _gameWhoseTurn = WhoseTurn 0 PhaseTile,
-        _gameScores = mempty
+        _gameScores = case numPlayers of NumPlayers n ->
+                                           HM.fromList $ take (fromIntegral n) $ zip (PlayerIndex <$> [0..]) (repeat 0)
       }
 
 initAppContext :: (MonadIO m) => m AppContext
@@ -191,7 +192,8 @@ reducer (PlaceTile loc) = \gs ->
   let currTile = gs ^?! gameTiles . ix 0
    in gs & gameTiles %~ drop 1
         & gameBoard . xyToTile . at loc ?~ currTile
-        & gameWhoseTurn . whoseTurnPhase %~ succ
+        -- TODO: check if out of meeples
+        & gameWhoseTurn . whoseTurnPhase .~ PhasePlaceMeeple loc
 reducer (PlaceMeeple loc mplc) = \gs ->
   let currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
    in gs
@@ -199,7 +201,8 @@ reducer (PlaceMeeple loc mplc) = \gs ->
           . tileMeeplePlacement
           .~ ((,currPlayer) <$> mplc)
         & collectAndScoreMeeples
-        & gameWhoseTurn . whoseTurnPhase %~ succ
+        -- TODO: check if even has abbot
+        & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot
 reducer (TakeAbbot mayLoc) = case mayLoc of
   Nothing -> id
   Just _ -> error "TODO: implement this"

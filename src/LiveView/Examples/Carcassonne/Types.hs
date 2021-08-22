@@ -113,7 +113,7 @@ makeClassy ''Tile
 
 newtype Board = Board
   { _xyToTile :: HashMap (Int, Int) Tile
-  }
+  } deriving Show
 
 makeClassy ''Board
 
@@ -125,8 +125,8 @@ data TerrainGraphKey = TerrainGraphKey
 
 makeClassyPrisms ''TerrainGraphKey
 
-data TurnPhase = PhaseTile | PhasePlaceMeeple | PhaseTakeAbbot
-  deriving (Eq, Ord, Enum, Bounded)
+data TurnPhase = PhaseTile | PhasePlaceMeeple (Int, Int) | PhaseTakeAbbot
+  deriving (Eq, Ord, Show)
 
 succWrapped :: (Eq a, Enum a, Bounded a) => a -> a
 succWrapped a
@@ -141,7 +141,7 @@ predWrapped a
 data WhoseTurn = WhoseTurn
   { _whoseTurnPlayer :: PlayerIndex,
     _whoseTurnPhase :: TurnPhase
-  }
+  } deriving Show
 
 makeClassy ''WhoseTurn
 
@@ -151,7 +151,7 @@ data GameState = GameState
     _gameNumPlayers :: NumPlayers,
     _gameWhoseTurn :: WhoseTurn,
     _gameScores :: HashMap PlayerIndex Score
-  }
+  } deriving Show
 
 makeClassy ''GameState
 

@@ -55,22 +55,33 @@ liveView = do
       $currTileProp
     }
     |]
-  renderBoard'
-  case tileList of
-    [] -> ""
-    (currTile : _) ->
-      div_ [class_ "current-turn"] $ do
-        renderTile currTile ["current-tile"]
-        rotLeft <-
-          addActionBinding
-            "click"
-            (\_ -> gameTiles . ix 0 %~ rotateCcw)
-        rotRight <-
-          addActionBinding
+  dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
+  WhoseTurn player phase <- view gameWhoseTurn
+  div_ [class_ "current-turn"] $ case phase of
+    PhaseTile -> do
+      case tileList of
+        [] -> ""
+        (currTile : _) -> do
+          renderTile currTile ["current-tile"]
+          rotLeft <-
+            addActionBinding
+             "click"
+             (\_ -> gameTiles . ix 0 %~ rotateCcw)
+          rotRight <-
+            addActionBinding
             "click"
             (\_ -> gameTiles . ix 0 %~ rotateCw)
-        button_ [hsaction_ rotLeft] "rotate left"
-        button_ [hsaction_ rotRight] "rotate right"
+          button_ [hsaction_ rotLeft] "rotate left"
+          button_ [hsaction_ rotRight] "rotate right"
+    PhasePlaceMeeple loc -> dimapLiveView id (\m -> gameState %~ reducer m) $ do
+      "Place meeple?"
+      -- TODO: surface which meeple placements are valid
+      placeMeeple <- addActionBinding "click" (\_ -> PlaceMeeple loc (Just PlaceMonastery))
+      button_ "yes"
+      button_ "no"
+  -- div_ $ do
+  --   gs <- view gameState
+  --   fromString $ show gs
 
 type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) :<|> Raw
 
