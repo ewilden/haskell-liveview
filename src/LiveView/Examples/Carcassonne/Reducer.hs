@@ -17,8 +17,10 @@ import Control.Lens.Operators
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Composition ((.:))
+import Data.Foldable
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
+import Data.HashSet qualified as HS
 import Data.Hashable (Hashable)
 import Data.HashMap.Monoidal qualified as MHM
 import Data.List.Extra (groupSort, genericLength)
@@ -26,6 +28,7 @@ import Data.Semigroup (Sum(..), Max(..))
 import Data.String (fromString)
 import Data.Text qualified as T
 import Data.Tuple.Extra (swap)
+import Debug.Trace
 import Focus qualified
 import Import
 import Lib
@@ -88,9 +91,17 @@ terrainEdges terrain loc board =
       nbrs = tileNeighborhood loc board
       nbrSides = facingSides nbrs
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
-        Just terrain' ->
-          if terrain' /= terrain
-            then error "impossible: different terrains neighboring"
+        Just nbrTerrain ->
+          if traceShowId nbrTerrain /= terrain then Nothing
+          else if nbrTerrain /= (tile ^. sides . (toLRUDLens lrudOne))
+            then error $
+                 "impossible: different terrains neighboring"
+                 ++ show loc'
+                 ++ show maySide
+                 ++ show lrudOne
+                 ++ show amITerm
+                 ++ show nbrTerrain
+                 ++ show terrain
             else
               Just
                 ( TerrainGraphKey loc lrudOne,
@@ -113,7 +124,7 @@ terrainEdges terrain loc board =
       hasInternalEdges =
         (> 0) $
           length $
-            filter snd $
+            filter snd $ filter (\(t, _) -> t == terrain) $
               sidesWithIsTerminus tile ^.. traverse
       applicableSides =
         filter
@@ -137,14 +148,55 @@ buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. x
       let edgesToAdd = terrainEdges terrain loc gs
        in Undirected.edges edgesToAdd
 
-terrainCompleteComponents :: SideTerrain -> GameState -> [[TerrainGraphKey]]
-terrainCompleteComponents terrain gs =
+terrainComponents :: SideTerrain -> GameState -> [HS.HashSet TerrainGraphKey]
+terrainComponents terrain gs =
   let terrainAdjMap =
         toAdjacencyMap
           (Undirected.fromUndirected $ buildTerrainGraph terrain gs)
       comps = vertexList $ scc terrainAdjMap
-   in comps <&> fromNonEmpty
-        & filter (not . hasVertex TerrainEmptyKey) <&> vertexList
+   in comps <&> fromNonEmpty <&> vertexList <&> HS.fromList
+
+terrainCompleteComponents :: SideTerrain -> GameState -> [[TerrainGraphKey]]
+terrainCompleteComponents terrain gs = terrainComponents terrain gs
+  & filter (not . HS.member TerrainEmptyKey)
+  <&> HS.toList
+  -- let terrainAdjMap =
+  --       toAdjacencyMap
+  --         (Undirected.fromUndirected $ buildTerrainGraph terrain gs)
+  --     comps = vertexList $ scc terrainAdjMap
+  --  in comps <&> fromNonEmpty
+  --       & filter (not . hasVertex TerrainEmptyKey) <&> vertexList
+
+validMeeplePlacements :: (Int, Int) -> GameState -> [MeeplePlacement]
+validMeeplePlacements loc gs =
+  let sidePlacements = do
+        tile <- gs ^.. gameBoard . xyToTile . ix loc
+        (lrudOne, sideTerrain) <- toList $ collectLRUDOnes $ tile^.sides
+        case sideTerrain of
+          Field -> []
+          _ -> do
+            let tccSets = terrainComponents sideTerrain gs
+            myTcc <- traceShowId $ filter (HS.member (TerrainGraphKey loc lrudOne)) tccSets
+            let hasMeeple :: TerrainGraphKey -> Bool
+                hasMeeple = \case
+                  TerrainGraphKey loc' lrudOne' -> fromMaybe False $ do
+                    mplace <- gs ^? gameBoard . xyToTile . ix loc' . tileMeeplePlacement
+                    True <$ mplace
+                  TerrainEmptyKey -> False
+            if any hasMeeple myTcc && not (HS.member TerrainEmptyKey myTcc)
+              then []
+              else [PlaceSide lrudOne]
+      centerPlacements = do
+        tile <- gs ^.. gameBoard . xyToTile . ix loc
+        case tile^.middle of
+          MMonastery -> [PlaceMonastery]
+          _ -> []
+  in centerPlacements ++ sidePlacements
+
+
+  -- let [cityGraph, roadGraph] = (`terrainCompleteComponents` gs) <$> [City, Road]
+
+
 
 -- For a given TerrainGraphKey returns the player owning a meeple on that
 -- terrain/side, if any.

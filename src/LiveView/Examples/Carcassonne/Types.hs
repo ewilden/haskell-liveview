@@ -21,7 +21,9 @@ data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
 
 data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
 
-data LRUDOne = L | R | U | D deriving (Show, Eq, Ord)
+data LRUDOne = L | R | U | D deriving (Show, Eq, Ord, Generic)
+
+instance Hashable LRUDOne
 
 flipLRUDOne :: LRUDOne -> LRUDOne
 flipLRUDOne = \case
@@ -121,9 +123,11 @@ data TerrainGraphKey = TerrainGraphKey
   { _keyLoc :: (Int, Int),
     _keySide :: LRUDOne
   } | TerrainEmptyKey
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 makeClassyPrisms ''TerrainGraphKey
+
+instance Hashable TerrainGraphKey
 
 data TurnPhase = PhaseTile | PhasePlaceMeeple (Int, Int) | PhaseTakeAbbot
   deriving (Eq, Ord, Show)

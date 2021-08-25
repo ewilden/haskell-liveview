@@ -76,9 +76,16 @@ liveView = do
     PhasePlaceMeeple loc -> dimapLiveView id (\m -> gameState %~ reducer m) $ do
       "Place meeple?"
       -- TODO: surface which meeple placements are valid
-      placeMeeple <- addActionBinding "click" (\_ -> PlaceMeeple loc (Just PlaceMonastery))
-      button_ "yes"
-      button_ "no"
+      let mkPlaceMeeple mayPlace = addActionBinding "click"
+              (\_ -> PlaceMeeple loc mayPlace)
+      ul_ $ do
+        gs <- view gameState
+        forM_ (validMeeplePlacements loc gs) $ \plc -> li_ $ do
+          plcAction <- mkPlaceMeeple (Just plc)
+          button_ [hsaction_ plcAction] $ fromString $ show $ plc
+      noPlaceMeeple <- mkPlaceMeeple Nothing
+      button_ [hsaction_ noPlaceMeeple] "skip"
+    PhaseTakeAbbot -> mempty
   -- div_ $ do
   --   gs <- view gameState
   --   fromString $ show gs
