@@ -82,7 +82,10 @@ rotateLRUDOneCcw = \case
 
 newtype NumPlayers = NumPlayers Natural deriving (Num, Eq, Show)
 
-newtype PlayerIndex = PlayerIndex Natural deriving (Num, Eq, Show, Ord, Generic)
+newtype PlayerIndex = PlayerIndex {
+  _unPlayerIndex :: Natural
+  } deriving (Num, Eq, Show, Ord, Generic)
+makeLenses ''PlayerIndex
 
 newtype Score = Score Natural deriving (Num, Eq, Show)
 

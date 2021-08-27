@@ -85,10 +85,18 @@ liveView = do
           button_ [hsaction_ plcAction] $ fromString $ show $ plc
       noPlaceMeeple <- mkPlaceMeeple Nothing
       button_ [hsaction_ noPlaceMeeple] "skip"
-    PhaseTakeAbbot -> mempty
-  -- div_ $ do
-  --   gs <- view gameState
-  --   fromString $ show gs
+    PhaseTakeAbbot -> dimapLiveView id (\m -> gameState %~ reducer m) $ do
+      "Take abbot?"
+      let mkTakeAbbot mayLoc = addActionBinding "click"
+              (\_ -> TakeAbbot mayLoc)
+      noTakeAbbot <- mkTakeAbbot Nothing
+      button_ [hsaction_ noTakeAbbot] "skip"
+  div_ $ do
+    gs <- view gameState
+    fromString $ show $ gs {
+                            _gameTiles = [],
+                            _gameBoard = Board mempty
+                           }
 
 type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) :<|> Raw
 

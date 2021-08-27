@@ -44,7 +44,7 @@ import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
 import StmContainers.Map qualified as StmMap
-import Text.Read
+import Text.Read hiding (get)
 import qualified Data.Bifunctor
 
 initGameState :: (MonadIO m) => NumPlayers -> m GameState
@@ -237,6 +237,24 @@ collectAndScoreMeeples = execState $ do
             ScoreRoad -> 1
       forM_ winners $ \playerInd -> do
         gameScores . ix playerInd += Score (multiplier * genericLength keyList)
+  gs <- get
+  let allTiles = gs ^. gameBoard . xyToTile . to HM.toList
+  forM_ allTiles $ \(loc, tile) -> do
+    case tile ^. tileMeeplePlacement of
+      Just (PlaceMonastery, playerIndex) -> do
+        let nineLocs = do
+              dx <- [-1, 0, 1]
+              dy <- [-1, 0, 1]
+              let (x,y) = loc
+                  loc' = (x + dx, y + dy)
+              pure loc'
+            numFilled = length $ catMaybes $ nineLocs <&> \loc' -> gs ^? gameBoard . xyToTile . ix loc'
+        if numFilled == 9 then do
+            gameBoard . xyToTile . ix loc . tileMeeplePlacement .= Nothing
+            gameScores . ix playerIndex += Score 9
+        else pure ()
+      _ -> pure ()
+
 
 reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
 reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
@@ -256,6 +274,9 @@ reducer (PlaceMeeple loc mplc) = \gs ->
         -- TODO: check if even has abbot
         & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot
 reducer (TakeAbbot mayLoc) = case mayLoc of
-  Nothing -> id
+  Nothing -> \gs ->
+    let (NumPlayers numPlayers) = gs ^. gameNumPlayers
+    in gs & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
+          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ ((`mod` numPlayers) . (+1))
   Just _ -> error "TODO: implement this"
 
