@@ -217,7 +217,7 @@ collectPlacedMeeple' (TerrainGraphKey loc side) gs =
 collectPlacedMeeple :: TerrainGraphKey -> State GameState (Maybe PlayerIndex)
 collectPlacedMeeple key = state $ collectPlacedMeeple' key
 
-data ScorableTerrain = ScoreCity | ScoreRoad
+data ScorableTerrain = ScoreCity | ScoreRoad deriving (Enum, Bounded)
 
 intoTerrain :: ScorableTerrain -> SideTerrain
 intoTerrain ScoreCity = City
@@ -225,7 +225,7 @@ intoTerrain ScoreRoad = Road
 
 collectAndScoreMeeples :: GameState -> GameState
 collectAndScoreMeeples = execState $ do
-  forM_ [ScoreCity, ScoreRoad] $ \terrain -> do
+  forM_ [minBound..maxBound] $ \terrain -> do
     doneComps <- gets $ terrainCompleteComponents $ intoTerrain terrain
     forM_ doneComps $ \keyList -> do
       mayPlayerInds <- mapM collectPlacedMeeple keyList
