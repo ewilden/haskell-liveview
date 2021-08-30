@@ -227,7 +227,7 @@ collectAndScoreMeeples :: GameState -> GameState
 collectAndScoreMeeples = execState $ do
   forM_ [minBound..maxBound] $ \terrain -> do
     doneComps <- gets $ terrainCompleteComponents $ intoTerrain terrain
-    forM_ doneComps $ \keyList -> do
+    forM_ (traceShowId doneComps) $ \keyList -> do
       mayPlayerInds <- mapM collectPlacedMeeple keyList
       let playerInds = catMaybes mayPlayerInds
           playerIndsAndCounts = MHM.toList $ foldMap (\i -> MHM.singleton i (Sum 1 :: Sum Int)) playerInds
@@ -269,7 +269,7 @@ reducer (PlaceMeeple loc mplc) = \gs ->
    in gs
         & gameBoard . xyToTile . ix loc
           . tileMeeplePlacement
-          .~ ((,currPlayer) <$> mplc)
+          .~ ((,currPlayer) <$> traceShowId mplc)
         & collectAndScoreMeeples
         -- TODO: check if even has abbot
         & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot

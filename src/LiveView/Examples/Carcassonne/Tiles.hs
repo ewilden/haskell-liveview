@@ -229,7 +229,21 @@ renderBoard' = do
                         ]
                     $ ""
                 -- (fromString $ show (neighborhood loc))
-                Just tile -> renderTileImage (_image tile) []
+                Just tile -> do
+                  renderTileImage (_image tile) []
+                  case tile ^. tileMeeplePlacement of
+                    Nothing -> ""
+                    Just (mplace, playerIndex) -> do
+                      let gridArea = case mplace of
+                            PlaceMonastery -> "2 / 2"
+                            PlaceSide L -> "2 / 1"
+                            PlaceSide R -> "2 / 3"
+                            PlaceSide U -> "1 / 2"
+                            PlaceSide D -> "3 / 2"
+                      div_ [class_ "meeple-container"] $ div_ [style_ [txt|
+                                          grid-area: $gridArea;
+                                          text-align: center;
+                                          |]] $ fromString $ show playerIndex
   div_
     [ class_ "board",
       style_
