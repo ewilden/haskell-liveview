@@ -140,7 +140,7 @@ terrainEdges terrain loc board =
           else []
    in edgesToNbrs <> internalEdges
 
-buildTerrainGraph :: SideTerrain -> GameState -> Undirected.Graph TerrainGraphKey
+buildTerrainGraph :: (HasBoard a) => SideTerrain -> a -> Undirected.Graph TerrainGraphKey
 buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. xyToTile)
   where
     folder graph loc tile = Undirected.overlay graph (graph' loc)
@@ -148,7 +148,7 @@ buildTerrainGraph terrain gs = HM.foldlWithKey' folder Undirected.empty (gs ^. x
       let edgesToAdd = terrainEdges terrain loc gs
        in Undirected.edges edgesToAdd
 
-terrainComponents :: SideTerrain -> GameState -> [HS.HashSet TerrainGraphKey]
+terrainComponents :: (HasBoard a) => SideTerrain -> a -> [HS.HashSet TerrainGraphKey]
 terrainComponents terrain gs =
   let terrainAdjMap =
         toAdjacencyMap
@@ -167,10 +167,10 @@ terrainCompleteComponents terrain gs = terrainComponents terrain gs
   --  in comps <&> fromNonEmpty
   --       & filter (not . hasVertex TerrainEmptyKey) <&> vertexList
 
-validMeeplePlacements :: (Int, Int) -> GameState -> [MeeplePlacement]
+validMeeplePlacements :: (HasBoard a) => (Int, Int) -> a -> [MeeplePlacement]
 validMeeplePlacements loc gs =
   let sidePlacements = do
-        tile <- gs ^.. gameBoard . xyToTile . ix loc
+        tile <- gs ^.. board . xyToTile . ix loc
         (lrudOne, sideTerrain) <- toList $ collectLRUDOnes $ tile^.sides
         case sideTerrain of
           Field -> []
@@ -180,14 +180,14 @@ validMeeplePlacements loc gs =
             let hasMeeple :: TerrainGraphKey -> Bool
                 hasMeeple = \case
                   TerrainGraphKey loc' lrudOne' -> fromMaybe False $ do
-                    mplace <- gs ^? gameBoard . xyToTile . ix loc' . tileMeeplePlacement
+                    mplace <- gs ^? board . xyToTile . ix loc' . tileMeeplePlacement
                     True <$ mplace
                   TerrainEmptyKey -> False
             if any hasMeeple myTcc && not (HS.member TerrainEmptyKey myTcc)
               then []
               else [PlaceSide lrudOne]
       centerPlacements = do
-        tile <- gs ^.. gameBoard . xyToTile . ix loc
+        tile <- gs ^.. board . xyToTile . ix loc
         case tile^.middle of
           MMonastery -> [PlaceMonastery]
           _ -> []

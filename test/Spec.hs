@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Import
 import           Hedgehog
@@ -14,6 +15,9 @@ import LiveView.Fixtures
 import Streaming
 import qualified Streaming.Prelude as S
 
+import LiveView.Examples.Carcassonne.Types
+import LiveView.Examples.Carcassonne.Reducer
+
 prop_diffThenPatchIsIdentity :: Property
 prop_diffThenPatchIsIdentity = property $ do
   xs <- forAll $ Gen.list (Range.linear 0 100) Gen.alpha
@@ -26,6 +30,30 @@ prop_toFromJSON = property $ do
   xs' <- forAll $ Gen.list (Range.linear 0 100) Gen.alpha
   let patch = toPatch $ getDiff xs xs'
   patch === fromJust (decode (encode patch))
+
+{-
+Perhaps we should start with some generators for board setups?
+One idea is to write a valid-turn generator and then generate board
+setups iteratively via generating valid turns.
+Then the number of turns until cutoff is a natural shrinkage dimension.
+Also, we should bias tile placement (e.g. toward lining up more edges)
+-}
+
+prop_flipLRUDOne_twice_id :: Property
+prop_flipLRUDOne_twice_id = property $ do
+  x <- forAll Gen.enumBounded
+  flipLRUDOne (flipLRUDOne x) === x
+
+prop_rotateLRUDCcw_four_id :: Property
+prop_rotateLRUDCcw_four_id = property $ do
+  [a, b, c, d] <- replicateM 4 (forAll Gen.alpha)
+  let x = LRUD a b c d
+  x === iterate rotateLRUDCcw x !! 4
+
+prop_toFromLRUDLens_id :: Property
+prop_toFromLRUDLens_id = property $ do
+  x <- forAll Gen.enumBounded
+  x === fromLRUDLens (toLRUDLens x)
 
 -- prop_serve_onePatchPerState :: Property
 -- prop_serve_onePatchPerState = property $ do

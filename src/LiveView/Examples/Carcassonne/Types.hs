@@ -21,7 +21,7 @@ data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
 
 data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
 
-data LRUDOne = L | R | U | D deriving (Show, Eq, Ord, Generic)
+data LRUDOne = L | R | U | D deriving (Show, Eq, Ord, Generic, Enum, Bounded)
 
 instance Hashable LRUDOne
 
