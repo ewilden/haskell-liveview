@@ -33,9 +33,6 @@ flipLRUDOne = \case
   D -> U
 
 
--- flipLRUD :: LRUD a -> LRUD a
--- flipLRUD
-
 data LRUD a = LRUD
   { _lrudL :: a,
     _lrudR :: a,

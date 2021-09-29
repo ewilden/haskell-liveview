@@ -6,6 +6,7 @@ import           Hedgehog
 import Data.Aeson
 import Data.Algorithm.Diff
 import Data.Text qualified as T
+import Data.Tuple.Sequence
 import Control.Monad.Except
 import Hedgehog.Gen qualified as Gen
 import Hedgehog.Range qualified as Range
@@ -15,8 +16,11 @@ import LiveView.Fixtures
 import Streaming
 import qualified Streaming.Prelude as S
 
+import LiveView.Examples.Carcassonne.Tiles
 import LiveView.Examples.Carcassonne.Types
 import LiveView.Examples.Carcassonne.Reducer
+import Data.Tuple (swap)
+import Data.Functor ((<&>))
 
 prop_diffThenPatchIsIdentity :: Property
 prop_diffThenPatchIsIdentity = property $ do
@@ -52,8 +56,32 @@ prop_rotateLRUDCcw_four_id = property $ do
 
 prop_toFromLRUDLens_id :: Property
 prop_toFromLRUDLens_id = property $ do
-  x <- forAll Gen.enumBounded
+  x :: LRUDOne <- forAll Gen.enumBounded
   x === fromLRUDLens (toLRUDLens x)
+
+prop_rotateLRUDOneCcw_four_id :: Property
+prop_rotateLRUDOneCcw_four_id = property $ do
+  x <- forAll Gen.enumBounded
+  x === iterate rotateLRUDOneCcw x !! 4
+
+genTile :: MonadGen m => m Tile
+genTile = do
+  numRotates <- Gen.element [0..4]
+  ((startingTile, 1) : tileSpecs)
+    <&> swap <&> fmap (\x -> iterate rotateCcw x !! numRotates)
+    <&> fmap pure & Gen.frequency
+
+genLRUD :: MonadGen m => m a -> m (LRUD a)
+genLRUD g = do
+  (a, b, c, d) <- sequenceT (g, g, g, g)
+  pure $ LRUD a b c d
+
+prop_rotateCcw_rotateCw_inv :: Property
+prop_rotateCcw_rotateCw_inv = property $ do
+  x <- forAll genTile
+  tripping x rotateCcw (Identity . rotateCw)
+
+
 
 -- prop_serve_onePatchPerState :: Property
 -- prop_serve_onePatchPerState = property $ do
