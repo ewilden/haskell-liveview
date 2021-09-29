@@ -170,6 +170,11 @@ tileNeighborhood loc b = f <$> (lrudNeighbors <*> pure loc)
   where
     f loc = b ^? xyToTile . ix loc
 
+canPlaceOnBoard :: (HasBoard b) => ((Int, Int), Tile) -> b -> Bool
+canPlaceOnBoard (loc, tile) b =
+  let nbrh = tileNeighborhood loc b
+  in canPlace tile nbrh
+
 lrudNeighbors :: LRUD ((Int, Int) -> (Int, Int))
 lrudNeighbors =
   LRUD

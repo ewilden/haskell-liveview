@@ -47,6 +47,9 @@ import StmContainers.Map qualified as StmMap
 import Text.Read hiding (get)
 import qualified Data.Bifunctor
 
+initBoard :: Board
+initBoard = Board (HM.singleton (0, 0) startingTile)
+
 initGameState :: (MonadIO m) => NumPlayers -> m GameState
 initGameState numPlayers = do
   initialTiles <- liftIO $ shuffle unshuffledTiles
