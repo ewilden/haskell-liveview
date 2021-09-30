@@ -159,7 +159,7 @@ terrainComponents terrain gs =
       comps = vertexList $ scc terrainAdjMap
    in comps <&> fromNonEmpty <&> vertexList <&> HS.fromList
 
-terrainCompleteComponents :: SideTerrain -> GameState -> [[TerrainGraphKey]]
+terrainCompleteComponents :: (HasBoard a) => SideTerrain -> a -> [[TerrainGraphKey]]
 terrainCompleteComponents terrain gs = terrainComponents terrain gs
   & filter (not . HS.member TerrainEmptyKey)
   <&> HS.toList

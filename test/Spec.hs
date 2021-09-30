@@ -98,19 +98,19 @@ addToBoardSomewhere tile (loc:candidates) board =
 
 openSpots :: Board -> [(Int, Int)]
 openSpots board = sortOn (\(x,y) -> x * x + y * y) $ do
-  x <- [-99..99]
-  y <- [-99..99]
+  let LRUD x0 x1 y1 y0 = computeTileBounds board
+  x <- [(-x0 - 1)..(x1 + 1)]
+  y <- [(-y0 - 1)..(y1 + 1)]
   let loc = (x,y)
   guard $ isNothing $ board ^. xyToTile . at loc
   pure loc
 
-
-addSomeTileToBoard :: forall m. (MonadGen m) => Board -> m Board
-addSomeTileToBoard board = do
+addGenTileToBoard :: (MonadGen m) => m Tile -> Board -> m Board
+addGenTileToBoard genTile' board = do
   let isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
       isPlaceable x = canPlaceOnBoard x board
       isAllowed x = not (isOccupied x) && isPlaceable x
-  tile <- genTile
+  tile <- genTile'
   let locs = openSpots board
       nonRotatedCandidates = zip locs (repeat tile)
       rotatedCandidates = do
@@ -121,53 +121,75 @@ addSomeTileToBoard board = do
   (loc,tile) <- Gen.element viableCandidates
   pure $ board & xyToTile . at loc ?~ tile
 
--- addSomeTileToBoard :: forall m. (MonadGen m) => Board -> m Board
--- addSomeTileToBoard board = do
---   let go :: m (Maybe Board)
---       go = do
---         loc <- genLoc
---         tile <- genTile
---         let isOccupied = board ^. xyToTile . at loc . to isJust
---             isPlaceable = canPlaceOnBoard (loc,tile) board
---         if not isOccupied && isPlaceable
---           then pure $ Just $ board & xyToTile . at loc ?~ tile
---           else pure $ Nothing
---       recGo = do
---         mayBoard <- go
---         maybe recGo pure mayBoard
---   recGo
+addSomeTileToBoard :: forall m. (MonadGen m) => Board -> m Board
+addSomeTileToBoard = addGenTileToBoard genTile
 
 genLoc :: MonadGen m => m (Int, Int)
 genLoc =
   sequenceT $ ((), ()) & both .~ Gen.int (Range.linearFrom 0 (-99) 99)
 
-genBoard :: MonadGen m => m Board
-genBoard =
+genBoardWithTiles :: MonadGen m => m Tile -> m Board
+genBoardWithTiles genTile' =
   Gen.recursive
     Gen.choice
     [ Gen.constant (Board (HM.singleton (0,0) startingTile))
     ]
-    [ Gen.subtermM genBoard addSomeTileToBoard
+    [ Gen.subtermM genBoard (addGenTileToBoard genTile')
     ]
+
+genBoard :: MonadGen m => m Board
+genBoard = genBoardWithTiles genTile
 
 countJusts :: [Maybe a] -> Int
 countJusts = length . catMaybes
 
-prop_computeTileBounds_hasTilesAtTwoCorners :: Property
-prop_computeTileBounds_hasTilesAtTwoCorners = property $ do
-  b <- forAll (Gen.filter (\b' -> b' ^. xyToTile . to HM.null . to not) genBoard)
+prop_computeTileBounds_areTight :: Property
+prop_computeTileBounds_areTight = property $ do
+  b <- forAll genBoard
   let LRUD x0 x1 y1 y0 = computeTileBounds b
       (xs, ys) = unzip $ b ^. xyToTile . to HM.keys
-      locs = do
-        x <- [x0, x1]
-        y <- [y0, y1]
-        pure (x,y)
-      cornerCount = countJusts ((\loc -> b ^. xyToTile . at loc) <$> locs)
   assert (x0 `elem` xs)
   assert (x1 `elem` xs)
   assert (y0 `elem` ys)
   assert (y1 `elem` ys)
 
+prop_allTilesInitiallyPlaceable :: Property
+prop_allTilesInitiallyPlaceable = property $ do
+  tile <- forAll genTile
+  let board = Board (HM.singleton (0,0) startingTile)
+      tileRotates = take 4 (iterate rotateCcw tile)
+      isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
+      isPlaceable x = canPlaceOnBoard x board
+      isAllowed x = not (isOccupied x) && isPlaceable x
+      isPlaceableSomewhere = not $ null $ filter isAllowed $ do
+        let LRUD x0 x1 y1 y0 = computeTileBounds board
+        x <- [(pred x0)..(succ x1)]
+        y <- [(pred y0)..(succ y1)]
+        tile' <- tileRotates
+        pure ((x,y), tile')
+  assert isPlaceableSomewhere
+
+genScorableSideTerrain :: (MonadGen m) => m SideTerrain
+genScorableSideTerrain = intoTerrain <$> Gen.enumBounded
+
+prop_numCompleteComponents_isMonotonic :: Property
+prop_numCompleteComponents_isMonotonic = property $ do
+  board <- forAll genBoard
+  board' <- forAll $ addSomeTileToBoard board
+  terrain <- forAll genScorableSideTerrain
+  assert $
+    length (terrainCompleteComponents terrain board)
+      <= length (terrainCompleteComponents terrain board')
+
+prop_numCompleteComponents_withOnlyStraightRoads_neverIncreases :: Property
+prop_numCompleteComponents_withOnlyStraightRoads_neverIncreases = property $ do
+  let tileGen = Gen.constant straightRoadTile
+  board <- forAll $ genBoardWithTiles tileGen
+  board' <- forAll $ addGenTileToBoard tileGen board
+  terrain <- forAll genScorableSideTerrain
+  assert $
+    length (terrainCompleteComponents terrain board)
+      == length (terrainCompleteComponents terrain board')
 
 -- prop_serve_onePatchPerState :: Property
 -- prop_serve_onePatchPerState = property $ do

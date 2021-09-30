@@ -75,6 +75,9 @@ startingTile :: Tile
 startingTile =
   Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0) Nothing
 
+straightRoadTile :: Tile
+straightRoadTile = fst $ ts "RFRF" (Road, Field, Road, Field) MField 8
+
 rotateCcw :: Tile -> Tile
 rotateCcw (Tile (LRUD l r u d) middle image mplPlace) =
   Tile

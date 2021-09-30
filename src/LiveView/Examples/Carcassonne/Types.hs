@@ -17,7 +17,7 @@ import LiveView
 import Numeric.Natural (Natural)
 import StmContainers.Map qualified as StmMap
 
-data SideTerrain = City | Field | Road deriving (Show, Eq, Ord)
+data SideTerrain = City | Field | Road deriving (Show, Eq, Ord, Enum, Bounded)
 
 data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
 
