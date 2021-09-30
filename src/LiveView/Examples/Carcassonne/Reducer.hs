@@ -159,6 +159,15 @@ terrainComponents terrain gs =
       comps = vertexList $ scc terrainAdjMap
    in comps <&> fromNonEmpty <&> vertexList <&> HS.fromList
 
+terrainComponentsIgnoringEmptyKey :: (HasBoard a) => SideTerrain -> a
+  -> [HS.HashSet TerrainGraphKey]
+terrainComponentsIgnoringEmptyKey terrain gs =
+  let terrainAdjMap = removeVertex TerrainEmptyKey $
+        toAdjacencyMap
+          (Undirected.fromUndirected $ buildTerrainGraph terrain gs)
+      comps = vertexList $ scc terrainAdjMap
+   in comps <&> fromNonEmpty <&> vertexList <&> HS.fromList
+
 terrainCompleteComponents :: (HasBoard a) => SideTerrain -> a -> [[TerrainGraphKey]]
 terrainCompleteComponents terrain gs = terrainComponents terrain gs
   & filter (not . HS.member TerrainEmptyKey)
@@ -178,7 +187,7 @@ validMeeplePlacements loc gs =
         case sideTerrain of
           Field -> []
           _ -> do
-            let tccSets = terrainComponents sideTerrain gs
+            let tccSets = terrainComponentsIgnoringEmptyKey sideTerrain gs
             myTcc <- traceShowId $ filter (HS.member (TerrainGraphKey loc lrudOne)) tccSets
             let hasMeeple :: TerrainGraphKey -> Bool
                 hasMeeple = \case
@@ -186,7 +195,7 @@ validMeeplePlacements loc gs =
                     mplace <- gs ^? board . xyToTile . ix loc' . tileMeeplePlacement
                     True <$ mplace
                   TerrainEmptyKey -> False
-            if any hasMeeple myTcc && not (HS.member TerrainEmptyKey myTcc)
+            if any hasMeeple myTcc
               then []
               else [PlaceSide lrudOne]
       centerPlacements = do

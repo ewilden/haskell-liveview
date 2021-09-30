@@ -177,9 +177,8 @@ prop_numCompleteComponents_isMonotonic = property $ do
   board <- forAll genBoard
   board' <- forAll $ addSomeTileToBoard board
   terrain <- forAll genScorableSideTerrain
-  assert $
-    length (terrainCompleteComponents terrain board)
-      <= length (terrainCompleteComponents terrain board')
+  diff (length (terrainCompleteComponents terrain board))
+      (<=) (length (terrainCompleteComponents terrain board'))
 
 prop_numCompleteComponents_withOnlyStraightRoads_neverIncreases :: Property
 prop_numCompleteComponents_withOnlyStraightRoads_neverIncreases = property $ do
