@@ -187,9 +187,19 @@ prop_numCompleteComponents_withOnlyStraightRoads_neverIncreases = property $ do
   board <- forAll $ genBoardWithTiles tileGen
   board' <- forAll $ addGenTileToBoard tileGen board
   terrain <- forAll genScorableSideTerrain
-  assert $
-    length (terrainCompleteComponents terrain board)
-      == length (terrainCompleteComponents terrain board')
+  length (terrainCompleteComponents terrain board)
+      === length (terrainCompleteComponents terrain board')
+
+prop_facingSides_matchTileSides :: Property
+prop_facingSides_matchTileSides = property $ do
+  board <- forAll genBoard
+  loc <- forAll $ Gen.element (board ^. xyToTile . to HM.keys)
+  let
+      nbrs = tileNeighborhood loc board
+      nbrSides = facingSides nbrs
+      isNothingOrEqual tileSide nbrSide = maybe (pure ()) (=== tileSide) nbrSide
+  sequence_ $
+    isNothingOrEqual <$> (board ^?! xyToTile . ix loc . sides) <*> nbrSides
 
 -- prop_serve_onePatchPerState :: Property
 -- prop_serve_onePatchPerState = property $ do

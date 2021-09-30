@@ -127,7 +127,7 @@ terrainEdges terrain loc board =
       hasInternalEdges =
         (> 0) $
           length $
-            filter snd $ filter (\(t, _) -> t == terrain) $
+            filter (not . snd) $ filter (\(t, _) -> t == terrain) $
               sidesWithIsTerminus tile ^.. traverse
       applicableSides =
         filter
