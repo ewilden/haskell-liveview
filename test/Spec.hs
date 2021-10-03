@@ -105,18 +105,22 @@ openSpots board = sortOn (\(x,y) -> x * x + y * y) $ do
   guard $ isNothing $ board ^. xyToTile . at loc
   pure loc
 
-addGenTileToBoard :: (MonadGen m) => m Tile -> Board -> m Board
-addGenTileToBoard genTile' board = do
-  let isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
-      isPlaceable x = canPlaceOnBoard x board
-      isAllowed x = not (isOccupied x) && isPlaceable x
-  tile <- genTile'
+possiblePlacements :: Board -> Tile -> [((Int, Int), Tile)]
+possiblePlacements board tile =
   let locs = openSpots board
       nonRotatedCandidates = zip locs (repeat tile)
+      isPlaceable x = canPlaceOnBoard x board
+      isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
+      isAllowed x = not (isOccupied x) && isPlaceable x
       rotatedCandidates = do
         (l,t) <- nonRotatedCandidates
         (l,) <$> [t, rotateCcw t, rotateCcw (rotateCcw t), rotateCw t]
-      viableCandidates = filter isAllowed rotatedCandidates
+  in filter isAllowed rotatedCandidates
+
+addGenTileToBoard :: (MonadGen m) => m Tile -> Board -> m Board
+addGenTileToBoard genTile' board = do
+  tile <- genTile'
+  let viableCandidates = possiblePlacements board tile
   when (null viableCandidates) Gen.discard
   (loc,tile) <- Gen.element viableCandidates
   pure $ board & xyToTile . at loc ?~ tile

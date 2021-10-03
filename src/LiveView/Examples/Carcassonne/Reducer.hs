@@ -95,7 +95,7 @@ terrainEdges terrain loc board =
       nbrSides = facingSides nbrs
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
         Just nbrTerrain ->
-          if traceShowId nbrTerrain /= terrain then Nothing
+          if nbrTerrain /= terrain then Nothing
           else if nbrTerrain /= (tile ^. sides . (toLRUDLens lrudOne))
             then error $
                  "impossible: different terrains neighboring"
@@ -172,12 +172,27 @@ terrainCompleteComponents :: (HasBoard a) => SideTerrain -> a -> [[TerrainGraphK
 terrainCompleteComponents terrain gs = terrainComponents terrain gs
   & filter (not . HS.member TerrainEmptyKey)
   <&> HS.toList
-  -- let terrainAdjMap =
-  --       toAdjacencyMap
-  --         (Undirected.fromUndirected $ buildTerrainGraph terrain gs)
-  --     comps = vertexList $ scc terrainAdjMap
-  --  in comps <&> fromNonEmpty
-  --       & filter (not . hasVertex TerrainEmptyKey) <&> vertexList
+
+toMeepleCount :: MeeplePlacement -> MeepleCounts
+toMeepleCount PlaceAbbot = mempty { _abbots = 1 }
+toMeepleCount _ = mempty { _meeples = 1 }
+
+countMeeples :: (HasBoard a) => a -> HashMap PlayerIndex MeepleCounts
+countMeeples board = MHM.getMonoidalHashMap $ mconcat $ do
+  tile <- board ^. xyToTile . to HM.elems
+  (meeplePlacement, playerIndex) <- tile ^.. tileMeeplePlacement . _Just
+  pure $ MHM.singleton playerIndex $ toMeepleCount meeplePlacement
+
+meepleLimits :: MeepleCounts
+meepleLimits = MeepleCounts {
+  _meeples = 7,
+  _abbots = 1
+                            }
+
+isBelowMeepleLimits :: MeepleCounts -> Bool
+isBelowMeepleLimits (MeepleCounts m a) =
+  m <= meepleLimits^.meeples && a <= meepleLimits^.abbots
+
 
 validMeeplePlacements :: (HasBoard a) => (Int, Int) -> a -> [MeeplePlacement]
 validMeeplePlacements loc gs =
@@ -188,7 +203,7 @@ validMeeplePlacements loc gs =
           Field -> []
           _ -> do
             let tccSets = terrainComponentsIgnoringEmptyKey sideTerrain gs
-            myTcc <- traceShowId $ filter (HS.member (TerrainGraphKey loc lrudOne)) tccSets
+            myTcc <- filter (HS.member (TerrainGraphKey loc lrudOne)) tccSets
             let hasMeeple :: TerrainGraphKey -> Bool
                 hasMeeple = \case
                   TerrainGraphKey loc' lrudOne' -> fromMaybe False $ do
@@ -239,7 +254,7 @@ collectAndScoreMeeples :: GameState -> GameState
 collectAndScoreMeeples = execState $ do
   forM_ [minBound..maxBound] $ \terrain -> do
     doneComps <- gets $ terrainCompleteComponents $ intoTerrain terrain
-    forM_ (traceShowId doneComps) $ \keyList -> do
+    forM_ doneComps $ \keyList -> do
       mayPlayerInds <- mapM collectPlacedMeeple keyList
       let playerInds = catMaybes mayPlayerInds
           playerIndsAndCounts = MHM.toList $ foldMap (\i -> MHM.singleton i (Sum 1 :: Sum Int)) playerInds
@@ -268,6 +283,7 @@ collectAndScoreMeeples = execState $ do
       _ -> pure ()
 
 
+reducer :: Message -> GameState -> GameState
 reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
 reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
 reducer (PlaceTile loc) = \gs ->
@@ -281,7 +297,7 @@ reducer (PlaceMeeple loc mplc) = \gs ->
    in gs
         & gameBoard . xyToTile . ix loc
           . tileMeeplePlacement
-          .~ ((,currPlayer) <$> traceShowId mplc)
+          .~ ((,currPlayer) <$> mplc)
         & collectAndScoreMeeples
         -- TODO: check if even has abbot
         & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot
@@ -292,3 +308,25 @@ reducer (TakeAbbot mayLoc) = case mayLoc of
           & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ ((`mod` numPlayers) . (+1))
   Just _ -> error "TODO: implement this"
 
+validateMessage :: GameState -> Message -> Either String ()
+validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of
+  (PhaseTile, CurrentTileRotateLeft) -> Right ()
+  (PhaseTile, CurrentTileRotateRight) -> Right ()
+  (PhaseTile, PlaceTile loc) ->
+    let currTile = gs ^?! gameTiles . ix 0
+    in if canPlaceOnBoard (loc, currTile) gs then Right () else Left "Can't place"
+  (PhaseTile, _) -> Left "Message n/a for PhaseTile"
+  (PhasePlaceMeeple loc, PlaceMeeple loc' mayPlace) -> do
+    when (loc /= loc') $ Left "Mismatched locations for PlaceMeeple"
+    case mayPlace of
+      Nothing -> pure ()
+      Just placement -> do
+        let validPlacements = validMeeplePlacements loc gs
+        unless (placement `elem` validPlacements)
+          $ Left "Invalid meeple placement"
+        let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
+            afterCounts = toMeepleCount placement <> (countMeeples gs ^?! ix playerIndex)
+        unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
+  (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
+  (PhaseTakeAbbot, TakeAbbot mayLoc) ->
+    error "TODO"

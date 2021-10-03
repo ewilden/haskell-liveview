@@ -91,9 +91,23 @@ instance Hashable PlayerIndex
 data MeeplePlacement
   = PlaceSide LRUDOne
   | PlaceMonastery
+  | PlaceAbbot
   deriving (Show, Eq, Ord)
 
 makeClassyPrisms ''MeeplePlacement
+
+data MeepleCounts = MeepleCounts
+  { _meeples :: Int,
+    _abbots :: Int
+  } deriving (Show, Eq, Ord)
+
+makeLenses ''MeepleCounts
+
+instance Semigroup MeepleCounts where
+  MeepleCounts m a <> MeepleCounts m' a' = MeepleCounts (m + m') (a + a')
+
+instance Monoid MeepleCounts where
+  mempty = MeepleCounts 0 0
 
 data TileImage = TileImage
   { _imageName :: Text,
@@ -131,6 +145,7 @@ instance Hashable TerrainGraphKey
 
 data TurnPhase = PhaseTile | PhasePlaceMeeple (Int, Int) | PhaseTakeAbbot
   deriving (Eq, Ord, Show)
+
 
 succWrapped :: (Eq a, Enum a, Bounded a) => a -> a
 succWrapped a
