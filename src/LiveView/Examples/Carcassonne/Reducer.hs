@@ -96,7 +96,7 @@ terrainEdges terrain loc board =
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
         Just nbrTerrain ->
           if nbrTerrain /= terrain then Nothing
-          else if nbrTerrain /= (tile ^. sides . (toLRUDLens lrudOne))
+          else if nbrTerrain /= tile ^. sides . toLRUDLens lrudOne
             then error $
                  "impossible: different terrains neighboring"
                  ++ show loc'
@@ -131,7 +131,7 @@ terrainEdges terrain loc board =
               sidesWithIsTerminus tile ^.. traverse
       applicableSides =
         filter
-          (\s -> terrain == tile ^. sides . (toLRUDLens s))
+          (\s -> terrain == tile ^. sides . toLRUDLens s)
           (lrudOnes ^.. traverse)
       internalEdges =
         if hasInternalEdges
@@ -206,17 +206,15 @@ validMeeplePlacements loc gs =
             myTcc <- filter (HS.member (TerrainGraphKey loc lrudOne)) tccSets
             let hasMeeple :: TerrainGraphKey -> Bool
                 hasMeeple = \case
-                  TerrainGraphKey loc' lrudOne' -> fromMaybe False $ do
+                  TerrainGraphKey loc' lrudOne' -> Just True == (do
                     mplace <- gs ^? board . xyToTile . ix loc' . tileMeeplePlacement
-                    True <$ mplace
+                    True <$ mplace)
                   TerrainEmptyKey -> False
-            if any hasMeeple myTcc
-              then []
-              else [PlaceSide lrudOne]
+            [PlaceSide lrudOne | not (any hasMeeple myTcc)]
       centerPlacements = do
         tile <- gs ^.. board . xyToTile . ix loc
         case tile^.middle of
-          MMonastery -> [PlaceMonastery]
+          MMonastery -> [PlaceMonastery, PlaceAbbot]
           _ -> []
   in centerPlacements ++ sidePlacements
 
@@ -262,7 +260,7 @@ collectAndScoreMeeples = execState $ do
           multiplier = case terrain of
             ScoreCity -> 2
             ScoreRoad -> 1
-      forM_ winners $ \playerInd -> do
+      forM_ winners $ \playerInd ->
         gameScores . ix playerInd += Score (multiplier * genericLength keyList)
   gs <- get
   let allTiles = gs ^. gameBoard . xyToTile . to HM.toList
@@ -305,7 +303,7 @@ reducer (TakeAbbot mayLoc) = case mayLoc of
   Nothing -> \gs ->
     let (NumPlayers numPlayers) = gs ^. gameNumPlayers
     in gs & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
-          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ ((`mod` numPlayers) . (+1))
+          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
   Just _ -> error "TODO: implement this"
 
 validateMessage :: GameState -> Message -> Either String ()
@@ -325,8 +323,14 @@ validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message
         unless (placement `elem` validPlacements)
           $ Left "Invalid meeple placement"
         let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
-            afterCounts = toMeepleCount placement <> (countMeeples gs ^?! ix playerIndex)
+            afterCounts = toMeepleCount placement <> countMeeples gs ^?! ix playerIndex
         unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
   (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
-  (PhaseTakeAbbot, TakeAbbot mayLoc) ->
-    error "TODO"
+  (PhaseTakeAbbot, TakeAbbot mayLoc) -> case mayLoc of
+    Nothing -> pure ()
+    (Just loc) ->
+      let mayPlace = gs ^? board . xyToTile . ix loc . tileMeeplePlacement . _Just
+          currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
+      in if mayPlace == Just (PlaceAbbot, currPlayer) then pure () else
+          Left "That player doesn't have an Abbot there"
+  (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"

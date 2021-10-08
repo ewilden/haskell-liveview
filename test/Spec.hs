@@ -23,7 +23,8 @@ import LiveView.Examples.Carcassonne.Reducer
 import Data.Tuple (swap)
 import Data.Functor ((<&>))
 import Control.Lens
-import Data.List (sortOn)
+import Data.List (sortOn, findIndex, elemIndex, foldl')
+import Data.Either (isRight)
 
 prop_diffThenPatchIsIdentity :: Property
 prop_diffThenPatchIsIdentity = property $ do
@@ -204,44 +205,31 @@ prop_facingSides_matchTileSides = property $ do
   sequence_ $
     isNothingOrEqual <$> (board ^?! xyToTile . ix loc . sides) <*> nbrSides
 
--- prop_serve_onePatchPerState :: Property
--- prop_serve_onePatchPerState = property $ do
---   let mkInt = Gen.int (Range.linear 0 100)
---   inputs <- forAll $ genStateOnlyLiveViewInputs mkInt
---   initR <- forAll mkInt
---   let outputs :: LiveViewOutputs Identity
---       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each inputs)
---   length (filter (\case (OutputPatch _) -> True; _ -> False) $ 
---     runIdentity $ S.toList_ (_outputStream outputs)) === length inputs
+genMessages :: (MonadGen m) => GameState -> m [Message]
+genMessages gs = case gs ^. gameWhoseTurn . whoseTurnPhase of
+  PhaseTile -> case gs ^? gameTiles . ix 0 of
+      Nothing -> pure []
+      Just tile -> 
+        let places = possiblePlacements (gs ^. gameBoard) tile
+        in Gen.element $ flip fmap places $ \(loc, tile') ->
+          let requiredRotates = fromJust $ elemIndex tile' (take 4 $ iterate rotateCcw tile)
+          in replicate requiredRotates CurrentTileRotateLeft <> [PlaceTile loc]
+  PhasePlaceMeeple loc -> do
+    msg <- Gen.element $ filter (isRight . validateMessage gs) $ PlaceMeeple loc Nothing :
+      (validMeeplePlacements loc gs <&> (PlaceMeeple loc . Just))
+    pure [msg]
+  PhaseTakeAbbot -> pure [TakeAbbot Nothing]
 
--- prop_serve_clockCountFrom0 :: Property 
--- prop_serve_clockCountFrom0 = property $ do
---   let mkInt = Gen.int (Range.linear 0 100)
---   inputs <- forAll $ genStateOnlyLiveViewInputs mkInt
---   initR <- forAll mkInt
---   let outputs :: LiveViewOutputs Identity
---       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each inputs)
---       clockInts = _unClock (snd $ _mountList outputs) : (mapMaybe (\case (OutputPatch a) -> Just $ _unClock $ snd a; _ -> Nothing) $ 
---                       runIdentity $ S.toList_ (_outputStream outputs))
---   clockInts === [0..(length clockInts - 1)]
-
--- prop_serveAndApply_noPathDependence :: Property
--- prop_serveAndApply_noPathDependence = property $ do
---   let mkInt = Gen.int (Range.linear 0 100)
---   inputs <- forAll $ genStateOnlyLiveViewInputs mkInt
---   inputs' <- forAll $ genStateOnlyLiveViewInputs mkInt
---   initR <- forAll mkInt
---   initR' <- forAll mkInt
---   endR <- forAll mkInt
---   let outputs :: LiveViewOutputs Identity
---       outputs = serveLiveView testIntLiveView (LiveViewInputs initR $ S.each (inputs ++ [InputState endR]))
---       outputs' :: LiveViewOutputs Identity
---       outputs' = serveLiveView testIntLiveView (LiveViewInputs initR' $ S.each (inputs' ++ [InputState endR]))
---       toFinalList :: LiveViewOutputs Identity -> PropertyT IO [T.Text]
---       toFinalList outs = toClientsidePatchlist outs & S.last_ & runExcept & evalEither >>= evalMaybe & (fmap fst)
---   out <- toFinalList outputs
---   out' <- toFinalList outputs'
---   out === out'
+genGameState :: (MonadGen m, MonadIO m) => m GameState
+genGameState = Gen.recursive Gen.choice 
+  [ do
+    n <- Gen.element [2..4]
+    initGameState (NumPlayers n)
+    ]
+  [ Gen.subtermM genGameState (\gs -> do
+    msgs <- genMessages gs
+    pure $ foldl' (flip reducer) gs msgs
+    )]
 
 tests :: IO Bool
 tests = checkParallel $$(discover)
