@@ -46,13 +46,15 @@ import Servant hiding (Stream)
 import StmContainers.Map qualified as StmMap
 import Text.Read hiding (get)
 import qualified Data.Bifunctor
+import Hedgehog (MonadGen)
+import Hedgehog.Gen qualified as Gen
 
 initBoard :: Board
 initBoard = Board (HM.singleton (0, 0) startingTile)
 
-initGameState :: (MonadIO m) => NumPlayers -> m GameState
-initGameState numPlayers = do
-  initialTiles <- liftIO $ shuffle unshuffledTiles
+initGameState :: (Monad m) => (forall a. [a] -> m [a]) -> NumPlayers -> m GameState
+initGameState shuffle numPlayers = do
+  initialTiles <- shuffle unshuffledTiles
   pure $
     GameState
       { _gameBoard = Board (HM.singleton (0, 0) startingTile),
@@ -65,7 +67,7 @@ initGameState numPlayers = do
 
 initAppContext :: (MonadIO m) => m AppContext
 initAppContext = do
-  gameState <- initGameState (NumPlayers 2)
+  gameState <- liftIO $ initGameState shuffle (NumPlayers 2)
   pure $
     AppContext
       { _makeTileImageUrl = \(TileImage name ccwRotates) ->
@@ -89,22 +91,25 @@ terrainEdges ::
   (Int, Int) ->
   b ->
   [(TerrainGraphKey, TerrainGraphKey)]
-terrainEdges terrain loc board =
-  let tile = board ^?! xyToTile . ix loc
-      nbrs = tileNeighborhood loc board
+terrainEdges terrain loc gs =
+  let tile = gs ^?! xyToTile . ix loc
+      nbrs = tileNeighborhood loc gs
       nbrSides = facingSides nbrs
       toMayEdge loc' maySide lrudOne amITerm = case maySide of
         Just nbrTerrain ->
           if nbrTerrain /= terrain then Nothing
-          else if nbrTerrain /= tile ^. sides . toLRUDLens lrudOne
+          else let thisEdge = tile ^. sides . toLRUDLens lrudOne in
+            if nbrTerrain /= thisEdge
             then error $
-                 "impossible: different terrains neighboring"
-                 ++ show loc'
-                 ++ show maySide
-                 ++ show lrudOne
-                 ++ show amITerm
-                 ++ show nbrTerrain
-                 ++ show terrain
+                 "impossible: different terrains neighboring   "
+                 ++ show (gs ^. board)
+                --  ++ show loc'
+                --  ++ show maySide
+                --  ++ show lrudOne
+                --  ++ show amITerm
+                --  ++ show nbrTerrain
+                --  ++ show terrain
+                --  ++ show thisEdge
             else
               Just
                 ( TerrainGraphKey loc lrudOne,
@@ -282,8 +287,10 @@ collectAndScoreMeeples = execState $ do
 
 
 reducer :: Message -> GameState -> GameState
-reducer CurrentTileRotateRight = gameTiles . ix 0 %~ rotateCcw
-reducer CurrentTileRotateLeft = gameTiles . ix 0 %~ rotateCw
+reducer CurrentTileRotateRight 
+  = gameTiles . ix 0 %~ rotateCw
+reducer CurrentTileRotateLeft 
+  = gameTiles . ix 0 %~ rotateCcw
 reducer (PlaceTile loc) = \gs ->
   let currTile = gs ^?! gameTiles . ix 0
    in gs & gameTiles %~ drop 1
@@ -323,7 +330,7 @@ validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message
         unless (placement `elem` validPlacements)
           $ Left "Invalid meeple placement"
         let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
-            afterCounts = toMeepleCount placement <> countMeeples gs ^?! ix playerIndex
+            afterCounts = toMeepleCount placement <> (countMeeples gs ^. ix playerIndex)
         unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
   (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
   (PhaseTakeAbbot, TakeAbbot mayLoc) -> case mayLoc of

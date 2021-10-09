@@ -77,7 +77,7 @@ rotateLRUDOneCcw = \case
   R -> U
   U -> L
 
-newtype NumPlayers = NumPlayers Natural deriving (Num, Eq, Show)
+newtype NumPlayers = NumPlayers Natural deriving (Num, Enum, Eq, Show)
 
 newtype PlayerIndex = PlayerIndex {
   _unPlayerIndex :: Natural

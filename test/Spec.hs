@@ -220,16 +220,21 @@ genMessages gs = case gs ^. gameWhoseTurn . whoseTurnPhase of
     pure [msg]
   PhaseTakeAbbot -> pure [TakeAbbot Nothing]
 
-genGameState :: (MonadGen m, MonadIO m) => m GameState
+genGameState :: (MonadGen m) => m GameState
 genGameState = Gen.recursive Gen.choice 
   [ do
     n <- Gen.element [2..4]
-    initGameState (NumPlayers n)
-    ]
+    initGameState Gen.shuffle n ]
   [ Gen.subtermM genGameState (\gs -> do
     msgs <- genMessages gs
     pure $ foldl' (flip reducer) gs msgs
     )]
+
+prop_belowMeepleLimits :: Property
+prop_belowMeepleLimits = property $ do
+  gs <- forAll genGameState
+  let counts = countMeeples gs
+  forM_ (HM.elems counts) (assert . isBelowMeepleLimits)
 
 tests :: IO Bool
 tests = checkParallel $$(discover)
