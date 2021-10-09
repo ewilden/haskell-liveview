@@ -18,6 +18,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Data.Composition ((.:))
 import Data.Foldable
+import Data.Functor (($>))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
 import Data.HashSet qualified as HS
@@ -312,6 +313,9 @@ reducer (TakeAbbot mayLoc) = case mayLoc of
     in gs & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
           & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
   Just _ -> error "TODO: implement this"
+
+guardedReducer :: GameState -> Message -> Either String GameState
+guardedReducer gs message = validateMessage gs message $> reducer message gs
 
 validateMessage :: GameState -> Message -> Either String ()
 validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of

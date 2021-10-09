@@ -81,7 +81,7 @@ newtype NumPlayers = NumPlayers Natural deriving (Num, Enum, Eq, Show)
 
 newtype PlayerIndex = PlayerIndex {
   _unPlayerIndex :: Natural
-  } deriving (Num, Eq, Show, Ord, Generic)
+  } deriving (Num, Eq, Show, Ord, Generic, Integral, Enum, Real)
 makeLenses ''PlayerIndex
 
 newtype Score = Score Natural deriving (Num, Eq, Show)
