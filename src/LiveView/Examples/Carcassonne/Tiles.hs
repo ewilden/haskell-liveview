@@ -11,21 +11,15 @@ module LiveView.Examples.Carcassonne.Tiles where
 import Control.Lens
 import Control.Monad.Random.Strict
 import Control.Monad.Reader
-import Control.Monad.State
-import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
-import Data.Kind (Constraint)
 import Data.List
 import Data.String
 import Data.Text (Text)
-import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Import
 import LiveView
 import LiveView.Examples.Carcassonne.Types
 import LiveView.Html
 import Lucid
-import System.Random
-import System.Random.Stateful
 
 ts :: Text -> (SideTerrain, SideTerrain, SideTerrain, SideTerrain) -> MiddleTerrain -> Int -> (Tile, Int)
 ts t sides middle frequency =
@@ -244,6 +238,7 @@ renderBoard' = do
                     Just (mplace, playerIndex) -> do
                       let gridArea = case mplace of
                             PlaceMonastery -> "2 / 2"
+                            PlaceAbbot -> "2 / 2"
                             PlaceSide L -> "2 / 1"
                             PlaceSide R -> "2 / 3"
                             PlaceSide U -> "1 / 2"

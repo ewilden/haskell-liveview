@@ -244,6 +244,7 @@ collectPlacedMeeple' (TerrainGraphKey loc side) gs =
                                 gs & xyToTile . ix loc . tileMeeplePlacement .~ Nothing)
        | otherwise -> Nothing
      PlaceMonastery -> Nothing
+     PlaceAbbot -> Nothing
 
 collectPlacedMeeple :: TerrainGraphKey -> State GameState (Maybe PlayerIndex)
 collectPlacedMeeple key = state $ collectPlacedMeeple' key
@@ -253,6 +254,33 @@ data ScorableTerrain = ScoreCity | ScoreRoad deriving (Enum, Bounded)
 intoTerrain :: ScorableTerrain -> SideTerrain
 intoTerrain ScoreCity = City
 intoTerrain ScoreRoad = Road
+
+data MonasteryCollectionMode = CompleteMeeple | CompleteAbbot | IncompleteAbbot deriving Eq
+
+tryCollectMonastery :: MonasteryCollectionMode -> (Int, Int) -> GameState -> Either String GameState
+tryCollectMonastery mcm loc gs = do
+  tile <- maybe (Left $ "No tile at " ++ show loc) Right $ gs ^? gameBoard . xyToTile . ix loc
+  let continue playerIndex = (do
+        let nineLocs = do
+              dx <- [-1, 0, 1]
+              dy <- [-1, 0, 1]
+              let (x,y) = loc
+                  loc' = (x + dx, y + dy)
+              pure loc'
+            numFilled = fromIntegral $ length $ catMaybes $ nineLocs <&> \loc' -> gs ^? gameBoard . xyToTile . ix loc'
+            countNeeded = case mcm of
+              CompleteMeeple -> 9
+              CompleteAbbot -> 9
+              IncompleteAbbot -> 0
+        if numFilled >= countNeeded then pure $
+          gs & gameBoard . xyToTile . ix loc . tileMeeplePlacement .~ Nothing
+            & gameScores . ix playerIndex .~ Score numFilled
+          else Left "Insufficiently filled")
+  case (tile ^. tileMeeplePlacement, mcm) of
+    (Just (PlaceMonastery, playerIndex), CompleteMeeple) -> continue playerIndex
+    (Just (PlaceAbbot, playerIndex), CompleteAbbot) -> continue playerIndex
+    (Just (PlaceAbbot, playerIndex), IncompleteAbbot) -> continue playerIndex
+    _ -> Left "Not the right abbot / monastery placement"
 
 collectAndScoreMeeples :: GameState -> GameState
 collectAndScoreMeeples = execState $ do
@@ -270,52 +298,59 @@ collectAndScoreMeeples = execState $ do
         gameScores . ix playerInd += Score (multiplier * genericLength keyList)
   gs <- get
   let allTiles = gs ^. gameBoard . xyToTile . to HM.toList
-  forM_ allTiles $ \(loc, tile) -> do
-    case tile ^. tileMeeplePlacement of
-      Just (PlaceMonastery, playerIndex) -> do
-        let nineLocs = do
-              dx <- [-1, 0, 1]
-              dy <- [-1, 0, 1]
-              let (x,y) = loc
-                  loc' = (x + dx, y + dy)
-              pure loc'
-            numFilled = length $ catMaybes $ nineLocs <&> \loc' -> gs ^? gameBoard . xyToTile . ix loc'
-        if numFilled == 9 then do
-            gameBoard . xyToTile . ix loc . tileMeeplePlacement .= Nothing
-            gameScores . ix playerIndex += Score 9
-        else pure ()
-      _ -> pure ()
+  forM_ allTiles $ \(loc, tile) -> forM_ [CompleteAbbot, CompleteMeeple] $ \mcm ->
+    modify (\s -> case tryCollectMonastery mcm loc s of
+      Left _ -> s
+      Right s' -> s')
 
+
+guardedReducer ::  Message -> GameState -> Either String GameState
+guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of
+  (PhaseTile, CurrentTileRotateLeft) -> pure $ (gameTiles . ix 0 %~ rotateCcw) gs
+  (PhaseTile, CurrentTileRotateRight) -> pure $ (gameTiles . ix 0 %~ rotateCw) gs
+  (PhaseTile, PlaceTile loc) -> do
+    currTile <- maybe (Left "Out of tiles") Right $ gs ^? gameTiles . ix 0
+    unless (canPlaceOnBoard (loc, currTile) gs) $ throwError "Can't place"
+    pure $ gs & gameTiles %~ drop 1
+          & gameBoard . xyToTile . at loc ?~ currTile
+          -- TODO: check if out of meeples
+          & gameWhoseTurn . whoseTurnPhase .~ PhasePlaceMeeple loc
+  (PhaseTile, _) -> Left "Message n/a for PhaseTile"
+  (PhasePlaceMeeple loc, PlaceMeeple loc' mayPlace) -> do
+    let currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
+    when (loc /= loc') $ throwError "Mismatched locations for PlaceMeeple"
+    let continue gs' = pure $ gs' & collectAndScoreMeeples
+                           & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot
+    case mayPlace of
+      Nothing -> continue gs
+      Just placement -> do
+        let validPlacements = validMeeplePlacements loc gs
+        unless (placement `elem` validPlacements)
+          $ Left "Invalid meeple placement"
+        let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
+            afterCounts = toMeepleCount placement <> (countMeeples gs ^. ix playerIndex)
+        unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
+        continue (gs
+          & gameBoard . xyToTile . ix loc
+            . tileMeeplePlacement
+            ?~ (placement, currPlayer))
+  (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
+  (PhaseTakeAbbot, TakeAbbot mayLoc) -> 
+    let (NumPlayers numPlayers) = gs ^. gameNumPlayers
+        continue gs' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
+          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
+    in case mayLoc of
+    Nothing -> pure $ continue gs
+    (Just loc) -> do
+      let mayPlace = gs ^? board . xyToTile . ix loc . tileMeeplePlacement . _Just
+          currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
+      unless (mayPlace == Just (PlaceAbbot, currPlayer)) 
+        $ Left "That player doesn't have an Abbot there"
+      continue <$> tryCollectMonastery IncompleteAbbot loc gs
+  (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"
 
 reducer :: Message -> GameState -> GameState
-reducer CurrentTileRotateRight 
-  = gameTiles . ix 0 %~ rotateCw
-reducer CurrentTileRotateLeft 
-  = gameTiles . ix 0 %~ rotateCcw
-reducer (PlaceTile loc) = \gs ->
-  let currTile = gs ^?! gameTiles . ix 0
-   in gs & gameTiles %~ drop 1
-        & gameBoard . xyToTile . at loc ?~ currTile
-        -- TODO: check if out of meeples
-        & gameWhoseTurn . whoseTurnPhase .~ PhasePlaceMeeple loc
-reducer (PlaceMeeple loc mplc) = \gs ->
-  let currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
-   in gs
-        & gameBoard . xyToTile . ix loc
-          . tileMeeplePlacement
-          .~ ((,currPlayer) <$> mplc)
-        & collectAndScoreMeeples
-        -- TODO: check if even has abbot
-        & gameWhoseTurn . whoseTurnPhase .~ PhaseTakeAbbot
-reducer (TakeAbbot mayLoc) = case mayLoc of
-  Nothing -> \gs ->
-    let (NumPlayers numPlayers) = gs ^. gameNumPlayers
-    in gs & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
-          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
-  Just _ -> error "TODO: implement this"
-
-guardedReducer :: GameState -> Message -> Either String GameState
-guardedReducer gs message = validateMessage gs message $> reducer message gs
+reducer = either error id .: guardedReducer
 
 validateMessage :: GameState -> Message -> Either String ()
 validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of

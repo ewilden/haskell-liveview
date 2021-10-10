@@ -61,6 +61,10 @@ dependencies:
 - warp
 - websockets
 
+ghc-options:
+- -fwarn-incomplete-patterns
+- -Werror
+
 default-extensions: 
 # GHC 2021
 - EmptyCase

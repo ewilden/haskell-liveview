@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 66867016766eb92e43043b3bccbae3462668ed7ab43c803e2dd4b039b33342ac
+-- hash: e3f4cc86d627ac0b4f4a382c7f4a3a90f6428efbb5925379ac1703b2abd74638
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -83,6 +83,7 @@ library
       LambdaCase
       NamedFieldPuns
       TupleSections
+  ghc-options: -fwarn-incomplete-patterns -Werror
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
@@ -170,7 +171,7 @@ executable liveview-simple-exe
       LambdaCase
       NamedFieldPuns
       TupleSections
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
@@ -260,7 +261,7 @@ test-suite liveview-simple-test
       LambdaCase
       NamedFieldPuns
       TupleSections
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
