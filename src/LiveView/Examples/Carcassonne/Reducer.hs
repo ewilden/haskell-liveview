@@ -351,32 +351,3 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
 
 reducer :: Message -> GameState -> GameState
 reducer = either error id .: guardedReducer
-
-validateMessage :: GameState -> Message -> Either String ()
-validateMessage gs message = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of
-  (PhaseTile, CurrentTileRotateLeft) -> Right ()
-  (PhaseTile, CurrentTileRotateRight) -> Right ()
-  (PhaseTile, PlaceTile loc) ->
-    let currTile = gs ^?! gameTiles . ix 0
-    in if canPlaceOnBoard (loc, currTile) gs then Right () else Left "Can't place"
-  (PhaseTile, _) -> Left "Message n/a for PhaseTile"
-  (PhasePlaceMeeple loc, PlaceMeeple loc' mayPlace) -> do
-    when (loc /= loc') $ Left "Mismatched locations for PlaceMeeple"
-    case mayPlace of
-      Nothing -> pure ()
-      Just placement -> do
-        let validPlacements = validMeeplePlacements loc gs
-        unless (placement `elem` validPlacements)
-          $ Left "Invalid meeple placement"
-        let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
-            afterCounts = toMeepleCount placement <> (countMeeples gs ^. ix playerIndex)
-        unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
-  (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
-  (PhaseTakeAbbot, TakeAbbot mayLoc) -> case mayLoc of
-    Nothing -> pure ()
-    (Just loc) ->
-      let mayPlace = gs ^? board . xyToTile . ix loc . tileMeeplePlacement . _Just
-          currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
-      in if mayPlace == Just (PlaceAbbot, currPlayer) then pure () else
-          Left "That player doesn't have an Abbot there"
-  (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"

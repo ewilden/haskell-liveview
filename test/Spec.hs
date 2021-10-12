@@ -215,7 +215,7 @@ genMessages gs = case gs ^. gameWhoseTurn . whoseTurnPhase of
           let requiredRotates = fromJust $ elemIndex tile' (take 4 $ iterate rotateCcw tile)
           in replicate requiredRotates CurrentTileRotateLeft <> [PlaceTile loc]
   PhasePlaceMeeple loc -> do
-    msg <- Gen.element $ filter (isRight . validateMessage gs) $ PlaceMeeple loc Nothing :
+    msg <- Gen.element $ filter (isRight . flip guardedReducer gs) $ PlaceMeeple loc Nothing :
       (validMeeplePlacements loc gs <&> (PlaceMeeple loc . Just))
     pure [msg]
   PhaseTakeAbbot -> pure [TakeAbbot Nothing]
@@ -239,4 +239,5 @@ prop_belowMeepleLimits = property $ do
 tests :: IO Bool
 tests = checkParallel $$(discover)
 
+main :: IO Bool
 main = tests
