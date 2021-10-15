@@ -143,7 +143,11 @@ makeClassyPrisms ''TerrainGraphKey
 
 instance Hashable TerrainGraphKey
 
-data TurnPhase = PhaseTile | PhasePlaceMeeple (Int, Int) | PhaseTakeAbbot
+data TurnPhase 
+  = PhaseTile 
+  | PhasePlaceMeeple (Int, Int) 
+  | PhaseTakeAbbot
+  | PhaseGameOver
   deriving (Eq, Ord, Show)
 
 

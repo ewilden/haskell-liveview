@@ -9,6 +9,7 @@
 module LiveView.Examples.Carcassonne.Tiles where
 
 import Control.Lens
+import Control.Monad (join)
 import Control.Monad.Random.Strict
 import Control.Monad.Reader
 import Data.HashMap.Strict qualified as HM
@@ -110,7 +111,7 @@ tileSize :: Text
 tileSize = "80px"
 
 (?||) :: ([Attribute] -> b) -> [[Attribute]] -> b
-f ?|| as = f (as >>= id)
+f ?|| as = f (join as)
 
 infixr 2 ?||
 
@@ -143,24 +144,15 @@ facingSides tileNeighbors =
    in (\nbr sideL -> nbr ^? _Just . sides . sideL)
         <$> tileNeighbors <*> facingLenses
 
--- facingSides (LRUD nbrL nbrR nbrU nbrD) =
---   LRUD
---     (f nbrL lrudR)
---     (f nbrR lrudL)
---     (f nbrU lrudD)
---     (f nbrD lrudU)
---   where
---     f nbr sideL = nbr ^? _Just . sides . sideL
-
 canPlace :: Tile -> LRUD (Maybe Tile) -> Bool
 canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
   let nbrs = catMaybes (nbrh ^.. traverse)
-      hasNbr = length nbrs > 0
+      hasNbr = not (null nbrs)
       isCompat mySide theirSide
-        | theirSide == Nothing = True
+        | isNothing theirSide = True
         | theirSide == Just mySide = True
         | otherwise = False
-   in hasNbr && (all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse)))
+   in hasNbr && all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse))
 
 tileNeighborhood :: (HasBoard b) => (Int, Int) -> b -> LRUD (Maybe Tile)
 tileNeighborhood loc b = f <$> (lrudNeighbors <*> pure loc)
@@ -223,7 +215,7 @@ renderBoard' = do
                             "click"
                             (\_ -> PlaceTile loc)
                       _ -> pure Nothing
-                  let canPlaceTileClass = maybe "cant-place" (const "can-place") $ mayPlaceCurrTile
+                  let canPlaceTileClass = maybe "cant-place" (const "can-place") mayPlaceCurrTile
                   div_
                     ?|| [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|],
                           maybeToList $ hsaction_ <$> mayPlaceCurrTile,

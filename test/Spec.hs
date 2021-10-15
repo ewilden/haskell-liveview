@@ -97,27 +97,6 @@ addToBoardSomewhere tile (loc:candidates) board =
           let (recurCandidates, recurBoard) = addToBoardSomewhere tile candidates board
           in (loc:recurCandidates, recurBoard)
 
-openSpots :: Board -> [(Int, Int)]
-openSpots board = sortOn (\(x,y) -> x * x + y * y) $ do
-  let LRUD x0 x1 y1 y0 = computeTileBounds board
-  x <- [(-x0 - 1)..(x1 + 1)]
-  y <- [(-y0 - 1)..(y1 + 1)]
-  let loc = (x,y)
-  guard $ isNothing $ board ^. xyToTile . at loc
-  pure loc
-
-possiblePlacements :: Board -> Tile -> [((Int, Int), Tile)]
-possiblePlacements board tile =
-  let locs = openSpots board
-      nonRotatedCandidates = zip locs (repeat tile)
-      isPlaceable x = canPlaceOnBoard x board
-      isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
-      isAllowed x = not (isOccupied x) && isPlaceable x
-      rotatedCandidates = do
-        (l,t) <- nonRotatedCandidates
-        (l,) <$> [t, rotateCcw t, rotateCcw (rotateCcw t), rotateCw t]
-  in filter isAllowed rotatedCandidates
-
 addGenTileToBoard :: (MonadGen m) => m Tile -> Board -> m Board
 addGenTileToBoard genTile' board = do
   tile <- genTile'
@@ -166,7 +145,7 @@ prop_allTilesInitiallyPlaceable = property $ do
       isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
       isPlaceable x = canPlaceOnBoard x board
       isAllowed x = not (isOccupied x) && isPlaceable x
-      isPlaceableSomewhere = not $ null $ filter isAllowed $ do
+      isPlaceableSomewhere = any isAllowed $ do
         let LRUD x0 x1 y1 y0 = computeTileBounds board
         x <- [(pred x0)..(succ x1)]
         y <- [(pred y0)..(succ y1)]
@@ -209,9 +188,11 @@ genMessages :: (MonadGen m) => GameState -> m [Message]
 genMessages gs = case gs ^. gameWhoseTurn . whoseTurnPhase of
   PhaseTile -> case gs ^? gameTiles . ix 0 of
       Nothing -> pure []
-      Just tile -> 
+      Just tile ->
         let places = possiblePlacements (gs ^. gameBoard) tile
-        in Gen.element $ flip fmap places $ \(loc, tile') ->
+        in
+          if null places then error ("no possible places for tile " ++ show gs) else
+          Gen.element $ flip fmap places $ \(loc, tile') ->
           let requiredRotates = fromJust $ elemIndex tile' (take 4 $ iterate rotateCcw tile)
           in replicate requiredRotates CurrentTileRotateLeft <> [PlaceTile loc]
   PhasePlaceMeeple loc -> do
@@ -219,9 +200,10 @@ genMessages gs = case gs ^. gameWhoseTurn . whoseTurnPhase of
       (validMeeplePlacements loc gs <&> (PlaceMeeple loc . Just))
     pure [msg]
   PhaseTakeAbbot -> pure [TakeAbbot Nothing]
+  PhaseGameOver -> pure []
 
 genGameState :: (MonadGen m) => m GameState
-genGameState = Gen.recursive Gen.choice 
+genGameState = Gen.recursive Gen.choice
   [ do
     n <- Gen.element [2..4]
     initGameState Gen.shuffle n ]
@@ -235,6 +217,17 @@ prop_belowMeepleLimits = property $ do
   gs <- forAll genGameState
   let counts = countMeeples gs
   forM_ (HM.elems counts) (assert . isBelowMeepleLimits)
+
+prop_alwaysPlaceable :: Property
+prop_alwaysPlaceable = property $ do
+  gs <- forAll genGameState
+  let isPhaseTile = case gs ^. gameWhoseTurn . whoseTurnPhase of
+        PhaseTile -> True
+        _ -> False
+      isPlaceable = isJust $ do
+        tile <- gs ^? gameTiles . ix 0
+        guard $ not $ null (possiblePlacements (gs ^. gameBoard) tile)
+  assert (not isPhaseTile || isPlaceable)
 
 tests :: IO Bool
 tests = checkParallel $$(discover)

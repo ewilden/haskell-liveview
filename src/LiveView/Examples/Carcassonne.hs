@@ -57,7 +57,7 @@ liveView = do
     |]
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
-  div_ [class_ "current-turn"] $ case phase of
+  dimapLiveView id (\m -> gameState %~ reducer m) $ div_ [class_ "current-turn"] $ case phase of
     PhaseTile -> do
       case tileList of
         [] -> ""
@@ -66,14 +66,14 @@ liveView = do
           rotLeft <-
             addActionBinding
              "click"
-             (\_ -> gameTiles . ix 0 %~ rotateCcw)
+             (const CurrentTileRotateLeft )
           rotRight <-
             addActionBinding
             "click"
-            (\_ -> gameTiles . ix 0 %~ rotateCw)
+            (const CurrentTileRotateRight)
           button_ [hsaction_ rotLeft] "rotate left"
           button_ [hsaction_ rotRight] "rotate right"
-    PhasePlaceMeeple loc -> dimapLiveView id (\m -> gameState %~ reducer m) $ do
+    PhasePlaceMeeple loc -> do
       "Place meeple?"
       -- TODO: surface which meeple placements are valid
       let mkPlaceMeeple mayPlace = addActionBinding "click"
@@ -85,12 +85,13 @@ liveView = do
           button_ [hsaction_ plcAction] $ fromString $ show $ plc
       noPlaceMeeple <- mkPlaceMeeple Nothing
       button_ [hsaction_ noPlaceMeeple] "skip"
-    PhaseTakeAbbot -> dimapLiveView id (\m -> gameState %~ reducer m) $ do
+    PhaseTakeAbbot -> do
       "Take abbot?"
       let mkTakeAbbot mayLoc = addActionBinding "click"
               (\_ -> TakeAbbot mayLoc)
       noTakeAbbot <- mkTakeAbbot Nothing
       button_ [hsaction_ noTakeAbbot] "skip"
+    PhaseGameOver -> "Game over!"
   div_ $ do
     gs <- view gameState
     fromString $ show $ gs {

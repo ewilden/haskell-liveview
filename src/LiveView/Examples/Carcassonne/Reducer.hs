@@ -24,6 +24,7 @@ import Data.HashMap.Strict qualified as HM
 import Data.HashSet qualified as HS
 import Data.Hashable (Hashable)
 import Data.HashMap.Monoidal qualified as MHM
+import Data.List (sortOn)
 import Data.List.Extra (groupSort, genericLength)
 import Data.Semigroup (Sum(..), Max(..))
 import Data.String (fromString)
@@ -78,13 +79,6 @@ initAppContext = do
            in [txt|/tiles/${name}50${suffix}.jpg|],
         _acGameState = gameState
       }
-
--- data Message
---   = CurrentTileRotateRight
---   | CurrentTileRotateLeft
---   | PlaceTile (Int, Int)
---   | PlaceMeeple (Int, Int) (Maybe MeeplePlacement)
---   | TakeMeeple (Maybe (Int, Int))
 
 terrainEdges ::
   (HasBoard b) =>
@@ -224,11 +218,6 @@ validMeeplePlacements loc gs =
           _ -> []
   in centerPlacements ++ sidePlacements
 
-
-  -- let [cityGraph, roadGraph] = (`terrainCompleteComponents` gs) <$> [City, Road]
-
-
-
 -- For a given TerrainGraphKey returns the player owning a meeple on that
 -- terrain/side, if any.
 -- Note that this only handles non-Monastery terrains.
@@ -303,6 +292,26 @@ collectAndScoreMeeples = execState $ do
       Left _ -> s
       Right s' -> s')
 
+openSpots :: Board -> [(Int, Int)]
+openSpots board = sortOn (\(x,y) -> x * x + y * y) $ do
+  let LRUD x0 x1 y1 y0 = computeTileBounds board
+  x <- [(-x0 - 1)..(x1 + 1)]
+  y <- [(-y0 - 1)..(y1 + 1)]
+  let loc = (x,y)
+  guard $ isNothing $ board ^. xyToTile . at loc
+  pure loc
+
+possiblePlacements :: Board -> Tile -> [((Int, Int), Tile)]
+possiblePlacements board tile =
+  let locs = openSpots board
+      nonRotatedCandidates = zip locs (repeat tile)
+      isPlaceable x = canPlaceOnBoard x board
+      isOccupied (loc,_) = board ^. xyToTile . at loc . to isJust
+      isAllowed x = not (isOccupied x) && isPlaceable x
+      rotatedCandidates = do
+        (l,t) <- nonRotatedCandidates
+        (l,) <$> [t, rotateCcw t, rotateCcw (rotateCcw t), rotateCw t]
+  in filter isAllowed rotatedCandidates
 
 guardedReducer ::  Message -> GameState -> Either String GameState
 guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message) of
@@ -337,8 +346,15 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
   (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
   (PhaseTakeAbbot, TakeAbbot mayLoc) -> 
     let (NumPlayers numPlayers) = gs ^. gameNumPlayers
-        continue gs' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
-          & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
+        continue gs' =
+          let gs'' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
+                      & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
+              step s = case s ^. gameTiles of
+                [] -> s & gameWhoseTurn . whoseTurnPhase .~ PhaseGameOver
+                (x:xs) -> if null (possiblePlacements (gs ^. gameBoard) x)
+                            then step (s & gameTiles %~ drop 1)
+                            else s & gameTiles %~ drop 1
+          in step gs''
     in case mayLoc of
     Nothing -> pure $ continue gs
     (Just loc) -> do
@@ -348,6 +364,7 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
         $ Left "That player doesn't have an Abbot there"
       continue <$> tryCollectMonastery IncompleteAbbot loc gs
   (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"
+  (PhaseGameOver, _) -> Left "Message n/a for PhaseGameOver"
 
 reducer :: Message -> GameState -> GameState
 reducer = either error id .: guardedReducer
