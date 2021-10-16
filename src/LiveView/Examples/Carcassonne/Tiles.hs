@@ -92,10 +92,10 @@ renderTileImage tileImage attrs = do
   genImageUrl <- asks (^. makeTileImageUrl)
   img_ $ [class_ "tile-image", src_ (genImageUrl tileImage)] ++ attrs
 
-renderTile :: (MonadReader r m, HasAppContext r) => Tile -> [Text] -> HtmlT m ()
+renderTile :: (HasAppContext r) => Tile -> [Text] -> LiveView r a
 renderTile tile classes =
   div_ [classes_ $ "tile" : classes] $
-    renderTileImage (_image tile) []
+    renderTileContents tile
 
 computeTileBounds :: Board -> LRUD Int
 computeTileBounds = HM.foldlWithKey' f (LRUD 0 0 0 0) . _xyToTile
@@ -224,21 +224,7 @@ renderBoard' = do
                     $ ""
                 -- (fromString $ show (neighborhood loc))
                 Just tile -> do
-                  renderTileImage (_image tile) []
-                  case tile ^. tileMeeplePlacement of
-                    Nothing -> ""
-                    Just (mplace, playerIndex) -> do
-                      let gridArea = case mplace of
-                            PlaceMonastery -> "2 / 2"
-                            PlaceAbbot -> "2 / 2"
-                            PlaceSide L -> "2 / 1"
-                            PlaceSide R -> "2 / 3"
-                            PlaceSide U -> "1 / 2"
-                            PlaceSide D -> "3 / 2"
-                      div_ [class_ "meeple-container"] $ div_ [style_ [txt|
-                                          grid-area: $gridArea;
-                                          text-align: center;
-                                          |]] $ fromString $ show playerIndex
+                  renderTileContents tile
   div_
     [ class_ "board",
       style_
@@ -248,3 +234,21 @@ renderBoard' = do
           |]
     ]
     $ mapM_ renderSpot spotsToRender
+
+renderTileContents :: (HasAppContext r) => Tile -> LiveView r a
+renderTileContents tile = do
+  renderTileImage (_image tile) []
+  case tile ^. tileMeeplePlacement of
+    Nothing -> ""
+    Just (mplace, playerIndex) -> do
+      let gridArea = case mplace of
+            PlaceMonastery -> "2 / 2"
+            PlaceAbbot -> "2 / 2"
+            PlaceSide L -> "2 / 1"
+            PlaceSide R -> "2 / 3"
+            PlaceSide U -> "1 / 2"
+            PlaceSide D -> "3 / 2"
+      div_ [class_ "meeple-container"] $ div_ [style_ [txt|
+                          grid-area: $gridArea;
+                          text-align: center;
+                          |]] $ fromString $ show playerIndex

@@ -339,32 +339,32 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
         let playerIndex = gs ^. gameWhoseTurn . whoseTurnPlayer
             afterCounts = toMeepleCount placement <> (countMeeples gs ^. ix playerIndex)
         unless (isBelowMeepleLimits afterCounts) $ Left "Above meeple limits"
-        continue (gs
+        advanceTurn <$> continue (gs
           & gameBoard . xyToTile . ix loc
             . tileMeeplePlacement
             ?~ (placement, currPlayer))
   (PhasePlaceMeeple _, _) -> Left "Message n/a for PhasePlaceMeeple"
-  (PhaseTakeAbbot, TakeAbbot mayLoc) -> 
-    let (NumPlayers numPlayers) = gs ^. gameNumPlayers
-        continue gs' =
-          let gs'' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
-                      & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
-              step s = case s ^. gameTiles of
-                [] -> s & gameWhoseTurn . whoseTurnPhase .~ PhaseGameOver
-                (x:xs) -> if null (possiblePlacements (gs ^. gameBoard) x)
-                            then step (s & gameTiles %~ drop 1)
-                            else s & gameTiles %~ drop 1
-          in step gs''
-    in case mayLoc of
-    Nothing -> pure $ continue gs
+  (PhaseTakeAbbot, TakeAbbot mayLoc) -> case mayLoc of
+    Nothing -> pure $ advanceTurn gs
     (Just loc) -> do
       let mayPlace = gs ^? board . xyToTile . ix loc . tileMeeplePlacement . _Just
           currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
       unless (mayPlace == Just (PlaceAbbot, currPlayer)) 
         $ Left "That player doesn't have an Abbot there"
-      continue <$> tryCollectMonastery IncompleteAbbot loc gs
+      advanceTurn <$> tryCollectMonastery IncompleteAbbot loc gs
   (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"
   (PhaseGameOver, _) -> Left "Message n/a for PhaseGameOver"
+  where 
+    (NumPlayers numPlayers) = gs ^. gameNumPlayers
+    advanceTurn gs' =
+      let gs'' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
+                  & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
+          step s = case s ^. gameTiles of
+            [] -> s & gameWhoseTurn . whoseTurnPhase .~ PhaseGameOver
+            (x:xs) -> if null (possiblePlacements (gs ^. gameBoard) x)
+                        then step (s & gameTiles %~ drop 1)
+                        else s & gameTiles %~ drop 1
+      in step gs''
 
 reducer :: Message -> GameState -> GameState
 reducer = either error id .: guardedReducer
