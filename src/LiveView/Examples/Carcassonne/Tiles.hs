@@ -89,7 +89,7 @@ rotateCw = rotateCcw . rotateCcw . rotateCcw
 
 renderTileImage :: (MonadReader r m, HasAppContext r) => TileImage -> [Attribute] -> HtmlT m ()
 renderTileImage tileImage attrs = do
-  genImageUrl <- asks (^. makeTileImageUrl)
+  genImageUrl <- asks (^. appContext . makeTileImageUrl)
   img_ $ [class_ "tile-image", src_ (genImageUrl tileImage)] ++ attrs
 
 renderTile :: (HasAppContext r) => Tile -> [Text] -> LiveView r a
@@ -145,7 +145,7 @@ facingSides tileNeighbors =
         <$> tileNeighbors <*> facingLenses
 
 canPlace :: Tile -> LRUD (Maybe Tile) -> Bool
-canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
+canPlace t nbrh =
   let nbrs = catMaybes (nbrh ^.. traverse)
       hasNbr = not (null nbrs)
       isCompat mySide theirSide
@@ -172,10 +172,10 @@ lrudNeighbors =
     (_2 +~ 1)
     (_2 -~ 1)
 
-renderBoard' :: forall r. (HasAppContext r) => LiveView r Message
+renderBoard' :: forall r. (HasAppContext r, HasGameState r) => LiveView r Message
 renderBoard' = do
-  board' <- view (appContext . gameState . board)
-  mayCurrTile <- asks (\s -> s ^? appContext . gameState . gameTiles . ix 0)
+  board' <- view (gameState . board)
+  mayCurrTile <- asks (\s -> s ^? gameState . gameTiles . ix 0)
   let (LRUD left right up down) = computeTileBounds board'
       xStart = left - 1
       xEnd = right + 1
@@ -194,7 +194,7 @@ renderBoard' = do
             (x, y - 1)
         where
           f loc = board' ^? xyToTile . ix loc
-      renderSpot :: (Int, Int) -> LiveView r Message
+      renderSpot :: HasGameState r => (Int, Int) -> LiveView r Message
       renderSpot loc@(x, y) =
         let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2]
          in div_
@@ -207,14 +207,20 @@ renderBoard' = do
               ]
               $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x, y) of
                 Nothing -> do
+                  turn <- view gameWhoseTurn
                   mayPlaceCurrTile <- do
-                    case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
-                      Just (currTile, True) ->
-                        Just
-                          <$> addActionBinding
-                            "click"
-                            (\_ -> PlaceTile loc)
+                  -- TODO: check that it's the current viewer's turn as well.
+                    case turn ^. whoseTurnPhase of
+                      PhaseTile -> 
+                        case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
+                          Just (currTile, True) ->
+                            Just
+                              <$> addActionBinding
+                                "click"
+                                (\_ -> PlaceTile loc)
+                          _ -> pure Nothing
                       _ -> pure Nothing
+                    
                   let canPlaceTileClass = maybe "cant-place" (const "can-place") mayPlaceCurrTile
                   div_
                     ?|| [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|],

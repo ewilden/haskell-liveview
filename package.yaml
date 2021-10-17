@@ -47,6 +47,8 @@ dependencies:
 - reducers
 - semigroupoids
 - servant
+- servant-auth
+- servant-auth-server
 - servant-lucid
 - servant-server
 - servant-websockets

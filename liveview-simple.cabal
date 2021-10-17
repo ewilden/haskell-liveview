@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e3f4cc86d627ac0b4f4a382c7f4a3a90f6428efbb5925379ac1703b2abd74638
+-- hash: c7727b50b26aef2d584959714fb36ac1703a73660c4dfbf49b557bb53502cc14
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -110,6 +110,8 @@ library
     , reducers
     , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets
@@ -199,6 +201,8 @@ executable liveview-simple-exe
     , reducers
     , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets
@@ -289,6 +293,8 @@ test-suite liveview-simple-test
     , reducers
     , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets

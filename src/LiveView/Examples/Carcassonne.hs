@@ -32,6 +32,8 @@ import Lucid
 import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
+import Servant.Auth.Server
+-- import Servant.Auth.Server.SetCookieOrphan ()
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
@@ -105,13 +107,13 @@ api :: Proxy API
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
-initServerContext = do
+initServerContext =
   liftIO $
-    ServerContext
-      <$> (lmap (intoWithAction .) <$> inMemoryStateStore initAppContext)
+  ServerContext
+    <$> (lmap (intoWithAction .) <$> inMemoryStateStore initGameRoomContext)
 
 server' :: ServerContext -> Server API
-server' servCtxt =
+server' servCtxt = let uid = UserId "foo" in
   ( serveServantLiveView
       putStrLn
       ( DefaultBasePage $
@@ -122,7 +124,9 @@ server' servCtxt =
       )
       "lvroot"
       (servCtxt ^. stateStore)
-      liveView
+      (dimapLiveView (`AppContext` uid)
+        (\ f grc -> f (AppContext grc uid) ^. gameRoomContext)
+        liveView)
       . SessionId
   )
     :<|> serveDirectoryWebApp "static"

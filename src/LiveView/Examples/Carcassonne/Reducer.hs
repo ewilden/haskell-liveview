@@ -67,18 +67,17 @@ initGameState shuffle numPlayers = do
                                            HM.fromList $ take (fromIntegral n) $ zip (PlayerIndex <$> [0..]) (repeat 0)
       }
 
-initAppContext :: (MonadIO m) => m AppContext
-initAppContext = do
+initGameRoomContext :: (MonadIO m) => m GameRoomContext
+initGameRoomContext = do
   gameState <- liftIO $ initGameState shuffle (NumPlayers 2)
-  pure $
-    AppContext
-      { _makeTileImageUrl = \(TileImage name ccwRotates) ->
-          let suffix = case ccwRotates `mod` 4 of
-                0 -> ""
-                n -> "-" <> tshow n
-           in [txt|/tiles/${name}50${suffix}.jpg|],
-        _acGameState = gameState
-      }
+  pure $ GameRoomContext 
+    { _makeTileImageUrl = \(TileImage name ccwRotates) ->
+        let suffix = case ccwRotates `mod` 4 of
+              0 -> ""
+              n -> "-" <> tshow n
+          in [txt|/tiles/${name}50${suffix}.jpg|],
+      _grGameState = gameState
+    }
 
 terrainEdges ::
   (HasBoard b) =>
@@ -295,8 +294,8 @@ collectAndScoreMeeples = execState $ do
 openSpots :: Board -> [(Int, Int)]
 openSpots board = sortOn (\(x,y) -> x * x + y * y) $ do
   let LRUD x0 x1 y1 y0 = computeTileBounds board
-  x <- [(-x0 - 1)..(x1 + 1)]
-  y <- [(-y0 - 1)..(y1 + 1)]
+  x <- [(pred x0)..(succ x1)]
+  y <- [(pred y0)..(succ y1)]
   let loc = (x,y)
   guard $ isNothing $ board ^. xyToTile . at loc
   pure loc

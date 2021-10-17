@@ -182,28 +182,37 @@ instance HasBoard GameState where
   board = gameBoard
 
 newtype SessionId = SessionId Text deriving (Show, Eq, Ord, Hashable)
+newtype UserId = UserId Text deriving (Show, Eq, Ord, Hashable)
+
+data GameRoomContext = GameRoomContext
+  { _makeTileImageUrl :: TileImage -> Text,
+    _grGameState :: GameState
+  }
+makeClassy ''GameRoomContext
+
+instance HasGameState GameRoomContext where
+  gameState = grGameState
 
 data AppContext = AppContext
-  { _makeTileImageUrl :: TileImage -> Text,
-    _acGameState :: GameState
+  { _acGameRoomContext :: GameRoomContext,
+    _userId :: UserId
   }
 
 makeClassy ''AppContext
 
-instance HasGameState AppContext where
-  gameState = acGameState
+instance HasGameRoomContext AppContext where
+  gameRoomContext = acGameRoomContext
 
-data SessionState a = SessionState
-  { _sessionChan :: STM.TChan (Maybe a),
-    _sessionCurrState :: a
-  }
+instance HasGameState AppContext where
+  gameState = gameState
+
+type CarcassoneStateStore = StateStore SessionId
+  (GameRoomContext -> GameRoomContext)
+  GameRoomContext
 
 newtype ServerContext = ServerContext
   { _scStateStore ::
-      StateStore
-        SessionId
-        (AppContext -> AppContext)
-        AppContext
+     CarcassoneStateStore
   }
 
 makeClassy ''ServerContext
@@ -212,8 +221,8 @@ instance
   HasStateStore
     ServerContext
     SessionId
-    (AppContext -> AppContext)
-    AppContext
+    (GameRoomContext -> GameRoomContext)
+    GameRoomContext
   where
   stateStore = scStateStore
 
