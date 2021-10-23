@@ -42,7 +42,7 @@ import Streaming.Prelude qualified as S
 import Servant.Auth.Server
 import Web.Cookie
 
-type LiveViewApi = ("reg" :> Get '[HTML] (Html ())) :<|> ("liveview" :> WebSocket)
+type LiveViewApi = Get '[HTML] (Html ()) :<|> ("liveview" :> Raw)
 
 data WssUrlSpec
   = Ws
@@ -92,7 +92,7 @@ serveServantLiveView ::
   token ->
   Server LiveViewApi
 serveServantLiveView debugPrint basePage rootId store lv token =
-  initialRenderEndpoint :<|> liveRenderEndpoint
+  initialRenderEndpoint :<|> Tagged (serveWsAsWaiApp liveRenderEndpoint)
   where
     rootWrapper x = div_ [id_ rootId] x
     initialRenderEndpoint = liftIO $ do

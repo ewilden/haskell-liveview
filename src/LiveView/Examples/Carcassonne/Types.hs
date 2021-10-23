@@ -204,7 +204,7 @@ instance HasGameRoomContext AppContext where
   gameRoomContext = acGameRoomContext
 
 instance HasGameState AppContext where
-  gameState = gameState
+  gameState = grGameState
 
 type CarcassoneStateStore = StateStore SessionId
   (GameRoomContext -> GameRoomContext)
