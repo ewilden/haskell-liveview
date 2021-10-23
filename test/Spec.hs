@@ -212,22 +212,36 @@ genGameState = Gen.recursive Gen.choice
     pure $ foldl' (flip reducer) gs msgs
     )]
 
+genGameStateSatisfying :: (MonadGen m) => (GameState -> Bool) -> m GameState
+genGameStateSatisfying f = do
+  let go gs = 
+        if f gs then pure gs
+        else do
+          msgs <- genMessages gs
+          if null msgs then Gen.discard
+          else go (foldl' (flip reducer) gs msgs)
+  gs <- genGameState
+  go gs
+
+
 prop_belowMeepleLimits :: Property
 prop_belowMeepleLimits = property $ do
   gs <- forAll genGameState
   let counts = countMeeples gs
   forM_ (HM.elems counts) (assert . isBelowMeepleLimits)
 
+prop_genGameStateSatisfying_works :: Property
+prop_genGameStateSatisfying_works = property $ do
+  gs <- forAll $ genGameStateSatisfying (\gs -> gs ^. gameWhoseTurn . whoseTurnPhase == PhaseTile)
+  (gs ^. gameWhoseTurn. whoseTurnPhase) === PhaseTile
+
 prop_alwaysPlaceable :: Property
 prop_alwaysPlaceable = property $ do
-  gs <- forAll genGameState
-  let isPhaseTile = case gs ^. gameWhoseTurn . whoseTurnPhase of
-        PhaseTile -> True
-        _ -> False
-      isPlaceable = isJust $ do
+  gs <- forAll $ genGameStateSatisfying (\gs -> gs ^. gameWhoseTurn . whoseTurnPhase == PhaseTile)
+  let isPlaceable = isJust $ do
         tile <- gs ^? gameTiles . ix 0
         guard $ not $ null (possiblePlacements (gs ^. gameBoard) tile)
-  assert (not isPhaseTile || isPlaceable)
+  assert isPlaceable
 
 tests :: IO Bool
 tests = checkParallel $$(discover)

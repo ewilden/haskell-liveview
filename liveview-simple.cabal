@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c7727b50b26aef2d584959714fb36ac1703a73660c4dfbf49b557bb53502cc14
+-- hash: e73549eced715628d481aa21b1c33157efabdf96669b716a4edd5ca201ce3dcd
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -94,10 +94,12 @@ library
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-types
     , lens
     , lens-aeson
     , list-t
@@ -123,6 +125,8 @@ library
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010
@@ -184,10 +188,12 @@ executable liveview-simple-exe
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-types
     , lens
     , lens-aeson
     , list-t
@@ -214,6 +220,8 @@ executable liveview-simple-exe
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010
@@ -276,10 +284,12 @@ test-suite liveview-simple-test
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-types
     , lens
     , lens-aeson
     , list-t
@@ -306,6 +316,8 @@ test-suite liveview-simple-test
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010

@@ -11,6 +11,8 @@ import Control.Lens
 import Control.Lens.Operators
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Aeson (FromJSON, ToJSON)
+import GHC.Generics (Generic)
 import Data.Composition ((.:))
 import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
@@ -33,7 +35,6 @@ import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
 import Servant.Auth.Server
--- import Servant.Auth.Server.SetCookieOrphan ()
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
@@ -101,9 +102,18 @@ liveView = do
                             _gameBoard = Board mempty
                            }
 
-type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) :<|> Raw
+data User = User { name :: String, email :: String }
+   deriving (Eq, Show, Read, Generic)
 
-api :: Proxy API
+instance ToJSON User
+instance ToJWT User
+instance FromJSON User
+instance FromJWT User
+
+type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) 
+  :<|> Raw
+
+api :: Proxy (API)
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
@@ -112,9 +122,9 @@ initServerContext =
   ServerContext
     <$> (lmap (intoWithAction .) <$> inMemoryStateStore initGameRoomContext)
 
-server' :: ServerContext -> Server API
+server' :: ServerContext -> Server (API)
 server' servCtxt = let uid = UserId "foo" in
-  ( serveServantLiveView
+  ( \sessId -> serveServantLiveView
       putStrLn
       ( DefaultBasePage $
           ScriptData
@@ -127,11 +137,13 @@ server' servCtxt = let uid = UserId "foo" in
       (dimapLiveView (`AppContext` uid)
         (\ f grc -> f (AppContext grc uid) ^. gameRoomContext)
         liveView)
-      . SessionId
+      (SessionId sessId)
   )
     :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
 main = do
   servCtxt <- initServerContext
+  -- let jwtCfg = defaultJWTSettings undefined
+  --     cfg = defaultCookieSettings :. jwtCfg :. EmptyContext
   Warp.run 5000 (serve api (server' servCtxt))
