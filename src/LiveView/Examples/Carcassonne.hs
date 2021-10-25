@@ -11,6 +11,7 @@ import Control.Lens
 import Control.Lens.Operators
 import Control.Monad.Reader
 import Control.Monad.State
+import Crypto.JOSE.JWK
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import Data.Composition ((.:))
@@ -19,6 +20,7 @@ import Data.HashMap.Strict qualified as HM
 import Data.Hashable (Hashable)
 import Data.String (fromString)
 import Data.Text qualified as T
+import Debug.Trace
 import Focus qualified
 import Import
 import Lib
@@ -35,10 +37,12 @@ import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
 import Servant.Auth.Server
+import Servant.HTML.Lucid
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Text.Read
+import Web.FormUrlEncoded
 
 liveView :: LiveView AppContext (AppContext -> AppContext)
 liveView = do
@@ -102,18 +106,40 @@ liveView = do
                             _gameBoard = Board mempty
                            }
 
-data User = User { name :: String, email :: String }
+newtype User = User { name :: String }
    deriving (Eq, Show, Read, Generic)
 
 instance ToJSON User
 instance ToJWT User
 instance FromJSON User
 instance FromJWT User
+instance FromForm User
 
-type API = ("session" :> Capture "sessionid" T.Text :> LiveViewApi) 
+type Post303 (cts :: [*]) (hs :: [*]) a =
+  Verb 'POST 303 cts (Headers (Header "Location" T.Text ': hs) a)
+
+type API auths
+  = (Auth auths User :> "session" :> Capture "sessionid" T.Text :> LiveViewApi)
+  :<|> ("login" :> ReqBody '[FormUrlEncoded] User :> Post303 '[JSON]
+          '[ Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie]
+            NoContent)
+  :<|> Get '[HTML] (Html ())
   :<|> Raw
 
-api :: Proxy (API)
+-- See https://github.com/haskell-servant/servant-auth/issues/146#issuecomment-660490703
+
+checkCreds :: CookieSettings -> JWTSettings -> User
+           -> Handler (Headers '[ Header "Location" T.Text,
+                Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
+checkCreds cookieSettings jwtSettings u@User { name = "Ali Baba" } = do
+    mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings u
+    case mApplyCookies of
+        Nothing           -> throwError err401
+        Just applyCookies -> return $ addHeader (T.pack "/session/asdf") (applyCookies NoContent)
+checkCreds _ _ User { name = user } =
+        throwError err401
+
+api :: Proxy (API '[Cookie])
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
@@ -122,28 +148,43 @@ initServerContext =
   ServerContext
     <$> (lmap (intoWithAction .) <$> inMemoryStateStore initGameRoomContext)
 
-server' :: ServerContext -> Server (API)
-server' servCtxt = let uid = UserId "foo" in
-  ( \sessId -> serveServantLiveView
-      putStrLn
-      ( DefaultBasePage $
-          ScriptData
-            { _liveViewScriptAbsolutePath = "/liveview.js",
-              _wssUrlSpec = Ws
-            }
-      )
-      "lvroot"
-      (servCtxt ^. stateStore)
-      (dimapLiveView (`AppContext` uid)
-        (\ f grc -> f (AppContext grc uid) ^. gameRoomContext)
-        liveView)
-      (SessionId sessId)
+server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
+server' cookieSettings jwtSettings servCtxt = let uid = UserId "foo" in
+  ( \authRes -> trace (show authRes) $ case authRes of
+      Authenticated _ -> (\sessId -> serveServantLiveView
+        putStrLn
+        ( DefaultBasePage $
+            ScriptData
+              { _liveViewScriptAbsolutePath = "/liveview.js",
+                _wssUrlSpec = Ws
+              }
+        )
+        "lvroot"
+        (servCtxt ^. stateStore)
+        (dimapLiveView (`AppContext` uid)
+          (\ f grc -> f (AppContext grc uid) ^. gameRoomContext)
+          liveView)
+        (SessionId sessId))
+      _ -> const (throwError err401 :<|> undefined)
   )
+    :<|> checkCreds cookieSettings jwtSettings
+    :<|> pure (doctypehtml_ $ do
+      form_ [action_ "/login", method_ "POST"] $ do
+        div_ $ do
+          input_ [name_ "name", value_ "Name"]
+        div_ $ button_ "Login"
+      )
     :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
 main = do
   servCtxt <- initServerContext
-  -- let jwtCfg = defaultJWTSettings undefined
-  --     cfg = defaultCookieSettings :. jwtCfg :. EmptyContext
-  Warp.run 5000 (serve api (server' servCtxt))
+  jwk <- generateKey
+  let jwtCfg = defaultJWTSettings jwk
+      cooks = defaultCookieSettings {
+        cookieIsSecure = NotSecure,
+        cookieSameSite = SameSiteStrict,
+        cookieXsrfSetting = Nothing
+      }
+      cfg = cooks :. jwtCfg :. EmptyContext
+  Warp.run 5000 (serveWithContext api cfg (server' defaultCookieSettings jwtCfg servCtxt))

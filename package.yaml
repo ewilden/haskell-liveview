@@ -35,7 +35,9 @@ dependencies:
 - focus
 - hashable >= 1.3.0.0 && < 2
 - hedgehog >= 1.0.4 && < 2
+- http-api-data
 - http-types
+- jose
 - lens
 - lens-aeson
 - list-t

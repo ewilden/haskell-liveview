@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e73549eced715628d481aa21b1c33157efabdf96669b716a4edd5ca201ce3dcd
+-- hash: b542b9626ac434686e06e83bb66dfdc6706debaf1c21023f0affcd4a8240ddc0
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -99,7 +99,9 @@ library
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
     , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
@@ -193,7 +195,9 @@ executable liveview-simple-exe
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
     , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
@@ -289,7 +293,9 @@ test-suite liveview-simple-test
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
     , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
