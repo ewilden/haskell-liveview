@@ -106,15 +106,6 @@ liveView = do
                             _gameBoard = Board mempty
                            }
 
-newtype User = User { name :: String }
-   deriving (Eq, Show, Read, Generic)
-
-instance ToJSON User
-instance ToJWT User
-instance FromJSON User
-instance FromJWT User
-instance FromForm User
-
 type Post303 (cts :: [*]) (hs :: [*]) a =
   Verb 'POST 303 cts (Headers (Header "Location" T.Text ': hs) a)
 
@@ -128,30 +119,37 @@ type API auths
 
 -- See https://github.com/haskell-servant/servant-auth/issues/146#issuecomment-660490703
 
-checkCreds :: CookieSettings -> JWTSettings -> User
+checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
            -> Handler (Headers '[ Header "Location" T.Text,
                 Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-checkCreds cookieSettings jwtSettings u@User { name = "Ali Baba" } = do
-    mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings u
-    case mApplyCookies of
-        Nothing           -> throwError err401
-        Just applyCookies -> return $ addHeader (T.pack "/session/asdf") (applyCookies NoContent)
-checkCreds _ _ User { name = user } =
-        throwError err401
+checkCreds cookieSettings jwtSettings srvCtxt user = do
+    wasUnused <- liftIO $ atomically $ do
+      userEntry <- StmMap.lookup user (srvCtxt ^. scUserSet)
+      case userEntry of
+        Nothing -> do
+          StmMap.insert () user (srvCtxt ^. scUserSet)
+          pure True
+        Just _ -> pure False
+    if wasUnused then do
+      mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings user
+      case mApplyCookies of
+          Nothing           -> throwError err401
+          Just applyCookies -> return $ addHeader "/session/asdf" (applyCookies NoContent)
+    else throwError err401 { errBody = "Username already taken." }
 
 api :: Proxy (API '[Cookie])
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
-initServerContext =
-  liftIO $
+initServerContext = liftIO $
   ServerContext
     <$> (lmap (intoWithAction .) <$> inMemoryStateStore initGameRoomContext)
+    <*> StmMap.newIO
 
 server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
-server' cookieSettings jwtSettings servCtxt = let uid = UserId "foo" in
+server' cookieSettings jwtSettings servCtxt =
   ( \authRes -> trace (show authRes) $ case authRes of
-      Authenticated _ -> (\sessId -> serveServantLiveView
+      Authenticated User { name } -> (\sessId -> serveServantLiveView
         putStrLn
         ( DefaultBasePage $
             ScriptData
@@ -161,17 +159,17 @@ server' cookieSettings jwtSettings servCtxt = let uid = UserId "foo" in
         )
         "lvroot"
         (servCtxt ^. stateStore)
-        (dimapLiveView (`AppContext` uid)
-          (\ f grc -> f (AppContext grc uid) ^. gameRoomContext)
+        (dimapLiveView (`AppContext` (UserId name))
+          (\ f grc -> f (AppContext grc (UserId name)) ^. gameRoomContext)
           liveView)
         (SessionId sessId))
       _ -> const (throwError err401 :<|> undefined)
   )
-    :<|> checkCreds cookieSettings jwtSettings
+    :<|> checkCreds cookieSettings jwtSettings servCtxt
     :<|> pure (doctypehtml_ $ do
       form_ [action_ "/login", method_ "POST"] $ do
         div_ $ do
-          input_ [name_ "name", value_ "Name"]
+          input_ [name_ "name", placeholder_ "Pick a name"]
         div_ $ button_ "Login"
       )
     :<|> serveDirectoryWebApp "static"
@@ -184,7 +182,9 @@ main = do
       cooks = defaultCookieSettings {
         cookieIsSecure = NotSecure,
         cookieSameSite = SameSiteStrict,
-        cookieXsrfSetting = Nothing
+        cookieXsrfSetting = Just defaultXsrfCookieSettings {
+          xsrfExcludeGet = True
+        }
       }
       cfg = cooks :. jwtCfg :. EmptyContext
   Warp.run 5000 (serveWithContext api cfg (server' defaultCookieSettings jwtCfg servCtxt))

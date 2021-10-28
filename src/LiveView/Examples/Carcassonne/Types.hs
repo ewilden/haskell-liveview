@@ -16,6 +16,9 @@ import GHC.Generics (Generic)
 import LiveView
 import Numeric.Natural (Natural)
 import StmContainers.Map qualified as StmMap
+import Data.Aeson (FromJSON, ToJSON)
+import Web.FormUrlEncoded
+import Servant.Auth.Server
 
 data SideTerrain = City | Field | Road deriving (Show, Eq, Ord, Enum, Bounded)
 
@@ -210,9 +213,22 @@ type CarcassoneStateStore = StateStore SessionId
   (GameRoomContext -> GameRoomContext)
   GameRoomContext
 
-newtype ServerContext = ServerContext
+
+newtype User = User { name :: Text }
+   deriving (Eq, Show, Read, Generic)
+
+instance ToJSON User
+instance ToJWT User
+instance FromJSON User
+instance FromJWT User
+instance FromForm User
+instance Hashable User
+
+
+data ServerContext = ServerContext
   { _scStateStore ::
-     CarcassoneStateStore
+     CarcassoneStateStore,
+    _scUserSet :: StmMap.Map User ()
   }
 
 makeClassy ''ServerContext
