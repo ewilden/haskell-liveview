@@ -62,6 +62,9 @@ liveView = do
       $currTileProp
     }
     |]
+  div_ $ do
+    (UserId uid) <- view userId
+    fromString $ "Logged in as " <> T.unpack uid
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
   dimapLiveView id (\m -> gameState %~ reducer m) $ div_ [class_ "current-turn"] $ case phase of
