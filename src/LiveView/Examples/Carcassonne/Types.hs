@@ -189,6 +189,7 @@ newtype UserId = UserId Text deriving (Show, Eq, Ord, Hashable)
 
 data GameRoomContext = GameRoomContext
   { _makeTileImageUrl :: TileImage -> Text,
+    _userId2Player :: HashMap UserId PlayerIndex,
     _grGameState :: GameState
   }
 makeClassy ''GameRoomContext
@@ -202,6 +203,9 @@ data AppContext = AppContext
   }
 
 makeClassy ''AppContext
+
+myPlayerIndex :: (HasAppContext ac) => ac -> PlayerIndex
+myPlayerIndex ac = ac ^?! appContext . gameRoomContext . userId2Player . ix (ac ^. userId)
 
 instance HasGameRoomContext AppContext where
   gameRoomContext = acGameRoomContext

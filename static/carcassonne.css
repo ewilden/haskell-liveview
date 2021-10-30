@@ -18,8 +18,7 @@
   position: relative;
 }
 
-.tile:hover {
-  /* background-color: var(--tile-hl-color); */
+.is-phase-place-tile .tile:hover {
   background-image: var(--curr-tile-img);
   background-size: contain;
   cursor: pointer;

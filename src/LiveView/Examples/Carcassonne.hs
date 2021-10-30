@@ -67,41 +67,44 @@ liveView = do
     fromString $ "Logged in as " <> T.unpack uid
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
-  dimapLiveView id (\m -> gameState %~ reducer m) $ div_ [class_ "current-turn"] $ case phase of
-    PhaseTile -> do
-      case tileList of
-        [] -> ""
-        (currTile : _) -> do
-          renderTile currTile ["current-tile"]
-          rotLeft <-
-            addActionBinding
-             "click"
-             (const CurrentTileRotateLeft )
-          rotRight <-
-            addActionBinding
-            "click"
-            (const CurrentTileRotateRight)
-          button_ [hsaction_ rotLeft] "rotate left"
-          button_ [hsaction_ rotRight] "rotate right"
-    PhasePlaceMeeple loc -> do
-      "Place meeple?"
-      -- TODO: surface which meeple placements are valid
-      let mkPlaceMeeple mayPlace = addActionBinding "click"
-              (\_ -> PlaceMeeple loc mayPlace)
-      ul_ $ do
-        gs <- view gameState
-        forM_ (validMeeplePlacements loc gs) $ \plc -> li_ $ do
-          plcAction <- mkPlaceMeeple (Just plc)
-          button_ [hsaction_ plcAction] $ fromString $ show $ plc
-      noPlaceMeeple <- mkPlaceMeeple Nothing
-      button_ [hsaction_ noPlaceMeeple] "skip"
-    PhaseTakeAbbot -> do
-      "Take abbot?"
-      let mkTakeAbbot mayLoc = addActionBinding "click"
-              (\_ -> TakeAbbot mayLoc)
-      noTakeAbbot <- mkTakeAbbot Nothing
-      button_ [hsaction_ noTakeAbbot] "skip"
-    PhaseGameOver -> "Game over!"
+  dimapLiveView id (\m -> gameState %~ reducer m) $ 
+    div_ [class_ "current-turn"] $ do
+      
+      case phase of
+        PhaseTile -> do
+          case tileList of
+            [] -> ""
+            (currTile : _) -> do
+              renderTile currTile ["current-tile"]
+              rotLeft <-
+                addActionBinding
+                "click"
+                (const CurrentTileRotateLeft )
+              rotRight <-
+                addActionBinding
+                "click"
+                (const CurrentTileRotateRight)
+              button_ [hsaction_ rotLeft] "rotate left"
+              button_ [hsaction_ rotRight] "rotate right"
+        PhasePlaceMeeple loc -> do
+          "Place meeple?"
+          -- TODO: surface which meeple placements are valid
+          let mkPlaceMeeple mayPlace = addActionBinding "click"
+                  (\_ -> PlaceMeeple loc mayPlace)
+          ul_ $ do
+            gs <- view gameState
+            forM_ (validMeeplePlacements loc gs) $ \plc -> li_ $ do
+              plcAction <- mkPlaceMeeple (Just plc)
+              button_ [hsaction_ plcAction] $ fromString $ show $ plc
+          noPlaceMeeple <- mkPlaceMeeple Nothing
+          button_ [hsaction_ noPlaceMeeple] "skip"
+        PhaseTakeAbbot -> do
+          "Take abbot?"
+          let mkTakeAbbot mayLoc = addActionBinding "click"
+                  (\_ -> TakeAbbot mayLoc)
+          noTakeAbbot <- mkTakeAbbot Nothing
+          button_ [hsaction_ noTakeAbbot] "skip"
+        PhaseGameOver -> "Game over!"
   div_ $ do
     gs <- view gameState
     fromString $ show $ gs {
@@ -132,7 +135,7 @@ checkCreds cookieSettings jwtSettings srvCtxt user = do
         Nothing -> do
           StmMap.insert () user (srvCtxt ^. scUserSet)
           pure True
-        Just _ -> pure False
+        Just () -> pure False
     if wasUnused then do
       mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings user
       case mApplyCookies of

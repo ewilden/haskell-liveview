@@ -176,6 +176,9 @@ renderBoard' :: forall r. (HasAppContext r, HasGameState r) => LiveView r Messag
 renderBoard' = do
   board' <- view (gameState . board)
   mayCurrTile <- asks (\s -> s ^? gameState . gameTiles . ix 0)
+  isPhasePlaceTile <- view (gameWhoseTurn . whoseTurnPhase . to (\case
+    PhaseTile -> True
+    _ -> False))
   let (LRUD left right up down) = computeTileBounds board'
       xStart = left - 1
       xEnd = right + 1
@@ -206,12 +209,12 @@ renderBoard' = do
                 class_ "spot"
               ]
               $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x, y) of
-                Nothing -> do
+                Nothing -> when isPhasePlaceTile $ do
                   turn <- view gameWhoseTurn
                   mayPlaceCurrTile <- do
                   -- TODO: check that it's the current viewer's turn as well.
                     case turn ^. whoseTurnPhase of
-                      PhaseTile -> 
+                      PhaseTile ->
                         case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
                           Just (currTile, True) ->
                             Just
@@ -220,7 +223,7 @@ renderBoard' = do
                                 (\_ -> PlaceTile loc)
                           _ -> pure Nothing
                       _ -> pure Nothing
-                    
+
                   let canPlaceTileClass = maybe "cant-place" (const "can-place") mayPlaceCurrTile
                   div_
                     ?|| [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|],
@@ -232,7 +235,7 @@ renderBoard' = do
                 Just tile -> do
                   renderTileContents tile
   div_
-    [ class_ "board",
+    [ classes_ ("board" : ["is-phase-place-tile" | isPhasePlaceTile]),
       style_
         [txt|
           grid-template-columns: repeat($numX, $tileSize);
