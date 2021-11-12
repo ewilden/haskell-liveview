@@ -72,8 +72,8 @@ server store = (serveServantLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
 initStateStore :: IO (StateStore () (AppState -> AppState) AppState)
-initStateStore = lmap mapper <$> inMemoryStateStore (pure (1, Add, 1))
-  where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
+initStateStore = lmap mapper <$> atomically (inMemoryStateStore (pure (1, Add, 1)))
+  where mapper :: (AppState -> AppState) -> (AppState -> WithAction STM.STM AppState)
         mapper = (intoWithAction . )
 
 main :: IO ()

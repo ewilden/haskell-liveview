@@ -5,10 +5,11 @@
 module LiveView.Examples.Carcassonne where
 
 import Control.Concurrent.Async qualified as Async
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, STM)
 import Control.Concurrent.STM qualified as STM
 import Control.Lens
 import Control.Lens.Operators
+import Control.Monad.Random.Strict
 import Control.Monad.Reader
 import Control.Monad.State
 import Crypto.JOSE.JWK
@@ -41,7 +42,6 @@ import Servant.HTML.Lucid
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
-import Text.Read
 import Web.FormUrlEncoded
 
 liveView :: LiveView AppContext (AppContext -> AppContext)
@@ -147,10 +147,13 @@ api :: Proxy (API '[Cookie])
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
-initServerContext = liftIO $
-  ServerContext
-    <$> (lmap (intoWithAction .) <$> inMemoryStateStore initGameRoomContext)
-    <*> StmMap.newIO
+initServerContext = liftIO $ do
+  g <- getSplit
+  atomically $ flip evalRandT g $ do
+    initGRC <- (initGameRoomContext :: RandT StdGen STM GameRoomContext)
+    stateStore' <- lift $ inMemoryStateStore (pure initGRC)
+    stmm <- lift StmMap.new
+    pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
 
 server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
 server' cookieSettings jwtSettings servCtxt =

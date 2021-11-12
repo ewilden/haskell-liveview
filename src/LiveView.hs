@@ -6,10 +6,11 @@
 
 module LiveView where
 
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, STM)
 import Control.Concurrent.STM qualified as STM
 import Control.Lens
 import Control.Lens qualified as L
+import Control.Monad.Base
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer.Strict (MonadWriter (tell), Writer, WriterT (runWriterT, WriterT), runWriter, writer, mapWriterT)
@@ -83,9 +84,9 @@ nullBindingState :: BindingState
 nullBindingState = BindingState 1
 
 data StateStore token mutator state = StateStore
-  { _subscribeState :: token -> IO (state, Stream (Of state) IO ()),
-    _mutateState :: token -> mutator -> IO (),
-    _deleteState :: token -> IO ()
+  { _subscribeState :: token -> STM (state, Stream (Of state) STM ()),
+    _mutateState :: token -> mutator -> STM (),
+    _deleteState :: token -> STM ()
   }
 
 makeClassy ''StateStore
@@ -107,55 +108,54 @@ instance Profunctor (StateStore token) where
       (\tok mutr -> mut tok (f mutr))
       del
 
-getOrInit :: (Eq k, Ord k, Hashable k) => STM.STM a -> k -> StmMap.Map k a -> STM.STM a
+getOrInit :: (Eq k, Ord k, Hashable k) => STM a -> k -> StmMap.Map k a -> STM a
 getOrInit def k m = do
-  mayV <- StmMap.lookup k m
+  mayV <- liftBase $ StmMap.lookup k m
   case mayV of
     Nothing -> do
       v <- def
-      StmMap.insert v k m >> pure v
+      liftBase $ StmMap.insert v k m >> pure v
     Just v -> pure v
 
 getOrInitM ::
-  (MonadIO m, Eq k, Ord k, Hashable k) =>
-  m a ->
+  (Eq k, Ord k, Hashable k) =>
+  STM a ->
   k ->
   StmMap.Map k a ->
-  m a
+  STM a
 getOrInitM mdef k m = do
   def <- mdef
-  liftIO $ STM.atomically $ getOrInit (pure def) k m
+  getOrInit (pure def) k m
 
 inMemoryStateStore ::
   forall state k.
   (Eq k, Ord k, Hashable k) =>
-  IO state ->
-  IO (StateStore k (state -> WithAction IO state) state)
+  STM state ->
+  STM (StateStore k (state -> WithAction STM state) state)
 inMemoryStateStore mkState = do
-  stmMap :: StmMap.Map k (state, STM.TChan (Either () state)) <- StmMap.newIO
-  let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChanIO
-      subscribe :: k -> IO (state, Stream (Of state) IO ())
+  stmMap :: StmMap.Map k (state, STM.TChan (Either () state)) <- StmMap.new
+  let mkStateWithChan = (,) <$> mkState <*> STM.newBroadcastTChan
+      subscribe :: k -> STM (state, Stream (Of state) STM ())
       subscribe token = do
         (s, wChan) <- getOrInitM mkStateWithChan token stmMap
-        rChan <- atomically $ STM.dupTChan wChan
-        pure (s, S.untilLeft $ STM.atomically (STM.readTChan rChan))
+        rChan <- STM.dupTChan wChan
+        pure (s, S.untilLeft (STM.readTChan rChan))
       mutate ::
         forall a.
-        IntoWithAction IO a state =>
+        IntoWithAction STM a state =>
         k ->
         (state -> a) ->
-        IO ()
+        STM ()
       mutate token f = do
-        mayPair <- atomically $ StmMap.lookup token stmMap
+        mayPair <- StmMap.lookup token stmMap
         case mayPair of
           Nothing -> pure ()
           Just (s, wChan) -> do
             let (s', w) = runWriter $ runWithAction $ intoWithAction (f s)
-            atomically $ do
-              STM.writeTChan wChan $ Right s'
-              StmMap.insert (s', wChan) token stmMap
+            STM.writeTChan wChan $ Right s'
+            StmMap.insert (s', wChan) token stmMap
             getAction w
-      delete token = atomically $ do
+      delete token = do
         mayPair <- StmMap.lookup token stmMap
         case mayPair of
           Nothing -> pure ()
@@ -170,7 +170,7 @@ newtype Renderer state mutator a = Renderer
   { runRenderer ::
       ReaderT
         state
-        (StateT BindingState (WriterT (BindingMap mutator) IO))
+        (StateT BindingState (WriterT (BindingMap mutator) STM))
         a
   }
   deriving
@@ -179,8 +179,7 @@ newtype Renderer state mutator a = Renderer
       Monad,
       MonadReader state,
       MonadState BindingState,
-      MonadWriter (BindingMap mutator),
-      MonadIO
+      MonadWriter (BindingMap mutator)
     )
 
 newtype WrappedRenderer a state mutator = WrappedRenderer
@@ -251,15 +250,15 @@ runLiveView :: forall state mutator.
   LiveView state mutator ->
   state ->
   BindingState ->
-  IO ((Html (), BindingState), BindingMap mutator)
+  STM ((Html (), BindingState), BindingMap mutator)
 runLiveView lv s bs =
   let rendOfHtml :: Renderer state mutator (Html ())
       rendOfHtml = L.commuteHtmlT lv
-      ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) IO)) (Html ())
+      ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) STM)) (Html ())
       ranRend = runRenderer rendOfHtml
-      stateT' :: StateT BindingState (WriterT (BindingMap mutator) IO) (Html ())
+      stateT' :: StateT BindingState (WriterT (BindingMap mutator) STM) (Html ())
       stateT' = runReaderT ranRend s
-      writerT' :: WriterT (BindingMap mutator) IO (Html (), BindingState)
+      writerT' :: WriterT (BindingMap mutator) STM (Html (), BindingState)
       writerT' = runStateT stateT' bs
   in runWriterT writerT'
   -- L.commuteHtmlT lv
@@ -275,7 +274,7 @@ serveLiveView :: forall token mutator state.
   LiveView state mutator ->
   Stream (Of BL.ByteString) IO () ->
   token ->
-  (IO (Html ()), IO ())
+  (STM (Html ()), IO ())
 serveLiveView deps store lv incomingMessages token =
   (init, live)
   where
@@ -284,19 +283,22 @@ serveLiveView deps store lv incomingMessages token =
       ((initHtml, _), _) <- runLiveView lv initialState nullBindingState
       pure initHtml
     live = do
-      (initialState, states) <- _subscribeState store token
-      ((initHtml, initBs), bindMap) <- runLiveView lv initialState nullBindingState
+      (initialState, states, initHtml, initBs, bindMap) <- atomically $ do
+        (initialState, states) <- _subscribeState store token
+        ((initHtml, initBs), bindMap) <- runLiveView lv initialState nullBindingState
+        pure (initialState, states, initHtml, initBs, bindMap)
+        
       let initClock = Clock 0
       (ioref :: IORef (Html (), BindingMap mutator, Clock, state))
         <- newIORef (initHtml, bindMap, initClock, initialState)
       _sdSendSocketMessage deps $
         encode (("mount" :: T.Text, toSplitText initHtml), initClock)
-      let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
+      let inpStream = mergePar (S.map Left $ hoist atomically states) (S.map Right incomingMessages)
       flip S.mapM_ inpStream $ \case
         Left s -> do
           (h, _, c, _) <- readIORef ioref
           let c' = succ c
-          ((h', _), bm') <- runLiveView lv s nullBindingState
+          ((h', _), bm') <- atomically $ runLiveView lv s nullBindingState
           _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
           writeIORef ioref (h', bm', c', s)
         Right msg -> do
@@ -315,5 +317,5 @@ serveLiveView deps store lv incomingMessages token =
                             . ix seed
                   case mayHandler of
                     Nothing -> pure ()
-                    Just handlers -> forM_ handlers (_mutateState store token . ($ BindingCall (_payload call ^? ix "value")))
+                    Just handlers -> atomically $ forM_ handlers (_mutateState store token . ($ BindingCall (_payload call ^? ix "value")))
                 else _sdDebugPrint deps $ "No matching handler for " <> show msg

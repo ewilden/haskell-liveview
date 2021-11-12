@@ -14,6 +14,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM qualified as STM
 import Control.Lens
 import Control.Lens.Operators
+import Control.Monad.Random.Strict
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Composition ((.:))
@@ -67,16 +68,17 @@ initGameState shuffle numPlayers = do
                                            HM.fromList $ take (fromIntegral n) $ zip (PlayerIndex <$> [0..]) (repeat 0)
       }
 
-initGameRoomContext :: (MonadIO m) => m GameRoomContext
+initGameRoomContext :: (MonadRandom m) => m GameRoomContext
 initGameRoomContext = do
-  gameState <- liftIO $ initGameState shuffle (NumPlayers 2)
+  gameState <- initGameState shuffle (NumPlayers 2)
   pure $ GameRoomContext 
     { _makeTileImageUrl = \(TileImage name ccwRotates) ->
         let suffix = case ccwRotates `mod` 4 of
               0 -> ""
               n -> "-" <> tshow n
           in [txt|/tiles/${name}50${suffix}.jpg|],
-      _grGameState = gameState
+      _grGameState = gameState,
+      _userId2Player = mempty
     }
 
 terrainEdges ::

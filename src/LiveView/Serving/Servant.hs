@@ -98,7 +98,7 @@ serveServantLiveView debugPrint basePage rootId store lv token =
     initialRenderEndpoint = liftIO $ do
       (case basePage of
          DefaultBasePage scriptData -> defaultBasePage rootId scriptData
-         CustomBasePage f -> f) <$> init
+         CustomBasePage f -> f) <$> atomically init
     liveRenderEndpoint conn = liftIO (live conn)
     (init, _) =
       serveLiveView
