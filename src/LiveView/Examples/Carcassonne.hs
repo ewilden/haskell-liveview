@@ -67,9 +67,12 @@ liveView = do
     fromString $ "Logged in as " <> T.unpack uid
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
-  dimapLiveView id (\m -> gameState %~ reducer m) $ 
+  me <- asks myPlayerIndex
+  when (me /= player) $ div_ [class_ "current-turn"] $ do
+    "Not your turn!"
+  when (me == player) $ dimapLiveView id (\m -> gameState %~ reducer m) $
     div_ [class_ "current-turn"] $ do
-      
+
       case phase of
         PhaseTile -> do
           case tileList of
@@ -134,6 +137,9 @@ checkCreds cookieSettings jwtSettings srvCtxt user = do
       case userEntry of
         Nothing -> do
           StmMap.insert () user (srvCtxt ^. scUserSet)
+          _mutateState (srvCtxt ^. scStateStore) (SessionId "asdf") (\grc ->
+            let currNumPlayers = grc ^. userId2Player . to HM.size
+            in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
           pure True
         Just () -> pure False
     if wasUnused then do

@@ -147,14 +147,11 @@ inMemoryStateStore mkState = do
         (state -> a) ->
         STM ()
       mutate token f = do
-        mayPair <- StmMap.lookup token stmMap
-        case mayPair of
-          Nothing -> pure ()
-          Just (s, wChan) -> do
-            let (s', w) = runWriter $ runWithAction $ intoWithAction (f s)
-            STM.writeTChan wChan $ Right s'
-            StmMap.insert (s', wChan) token stmMap
-            getAction w
+        (s, wChan) <- getOrInitM mkStateWithChan token stmMap
+        let (s', w) = runWriter $ runWithAction $ intoWithAction (f s)
+        STM.writeTChan wChan $ Right s'
+        StmMap.insert (s', wChan) token stmMap
+        getAction w
       delete token = do
         mayPair <- StmMap.lookup token stmMap
         case mayPair of
