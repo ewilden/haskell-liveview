@@ -8,6 +8,7 @@ module LiveView where
 
 import Control.Concurrent.STM (atomically, STM)
 import Control.Concurrent.STM qualified as STM
+import Control.Concurrent.Async qualified as Async
 import Control.Lens
 import Control.Lens qualified as L
 import Control.Monad.Base
@@ -40,6 +41,7 @@ import Lucid.Base qualified as L
 import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
+import System.Random (StdGen)
 import Text.Read (readMaybe)
 
 newtype WithAction m a = WithAction
@@ -86,13 +88,14 @@ nullBindingState = BindingState 1
 data StateStore token mutator state = StateStore
   { _subscribeState :: token -> STM (state, Stream (Of state) STM ()),
     _mutateState :: token -> mutator -> STM (),
-    _deleteState :: token -> STM ()
+    _deleteState :: token -> STM (),
+    _existsState :: token -> STM Bool
   }
 
 makeClassy ''StateStore
 
 instance Profunctor (StateStore token) where
-  rmap f (StateStore sub mut del) =
+  rmap f (StateStore sub mut del exists) =
     StateStore
       ( \tok -> do
           (x, xs) <- sub tok
@@ -102,11 +105,13 @@ instance Profunctor (StateStore token) where
       )
       mut
       del
-  lmap f (StateStore sub mut del) =
+      exists
+  lmap f (StateStore sub mut del exists) =
     StateStore
       sub
       (\tok mutr -> mut tok (f mutr))
       del
+      exists
 
 getOrInit :: (Eq k, Ord k, Hashable k) => STM a -> k -> StmMap.Map k a -> STM a
 getOrInit def k m = do
@@ -159,7 +164,9 @@ inMemoryStateStore mkState = do
           Just (s, wChan) -> do
             STM.writeTChan wChan $ Left ()
             StmMap.delete token stmMap
-  pure $ StateStore subscribe mutate delete
+      exists token = do
+        StmMap.lookup token stmMap <&> isJust
+  pure $ StateStore subscribe mutate delete exists
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 

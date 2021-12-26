@@ -82,7 +82,7 @@ liveView = do
               rotLeft <-
                 addActionBinding
                 "click"
-                (const CurrentTileRotateLeft )
+                (const CurrentTileRotateLeft)
               rotRight <-
                 addActionBinding
                 "click"
@@ -98,7 +98,7 @@ liveView = do
             gs <- view gameState
             forM_ (validMeeplePlacements loc gs) $ \plc -> li_ $ do
               plcAction <- mkPlaceMeeple (Just plc)
-              button_ [hsaction_ plcAction] $ fromString $ show $ plc
+              button_ [hsaction_ plcAction] $ fromString $ show plc
           noPlaceMeeple <- mkPlaceMeeple Nothing
           button_ [hsaction_ noPlaceMeeple] "skip"
         PhaseTakeAbbot -> do
@@ -132,22 +132,31 @@ checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
            -> Handler (Headers '[ Header "Location" T.Text,
                 Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
 checkCreds cookieSettings jwtSettings srvCtxt user = do
-    wasUnused <- liftIO $ atomically $ do
-      userEntry <- StmMap.lookup user (srvCtxt ^. scUserSet)
-      case userEntry of
-        Nothing -> do
-          StmMap.insert () user (srvCtxt ^. scUserSet)
-          _mutateState (srvCtxt ^. scStateStore) (SessionId "asdf") (\grc ->
-            let currNumPlayers = grc ^. userId2Player . to HM.size
-            in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
-          pure True
-        Just () -> pure False
-    if wasUnused then do
-      mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings user
-      case mApplyCookies of
-          Nothing           -> throwError err401
-          Just applyCookies -> return $ addHeader "/session/asdf" (applyCookies NoContent)
-    else throwError err401 { errBody = "Username already taken." }
+    maySessid <- liftIO $ do
+      g <- getSplit
+      atomically $ flip evalRandT g $ do 
+        userEntry <- lift $ StmMap.lookup user (srvCtxt ^. scUserSet)
+        case userEntry of
+          Nothing -> do
+            let getsessid = do
+                  candidate <- getRandom <&> abs <&> fromString @T.Text . take 16 . show @Int
+                  exists <- lift $ (srvCtxt ^. scStateStore . existsState) $ SessionId candidate
+                  if exists then getsessid else pure candidate
+            sessid <- getsessid
+            lift $ StmMap.insert () user (srvCtxt ^. scUserSet)
+            lift $ _mutateState (srvCtxt ^. scStateStore) (SessionId sessid) (\grc ->
+              let currNumPlayers = grc ^. userId2Player . to HM.size
+              in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
+            pure (Just sessid)
+          Just () -> pure Nothing
+    case maySessid of
+      Nothing -> throwError err401 { errBody = "Username already taken." }
+      Just sessid -> do
+        mApplyCookies <- liftIO $ acceptLogin cookieSettings jwtSettings user
+        case mApplyCookies of
+            Nothing           -> throwError err401
+            Just applyCookies -> return $ addHeader ("/session/" <> sessid) (applyCookies NoContent)
+-- TODO: allow user to join game created by someone else
 
 api :: Proxy (API '[Cookie])
 api = Proxy
