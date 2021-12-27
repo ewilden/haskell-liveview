@@ -87,7 +87,7 @@ serveServantLiveView ::
   (String -> IO ()) ->
   BasePageSpec ->
   T.Text ->
-  StateStore token mutator state ->
+  StateStore IO token mutator state ->
   LiveView state mutator ->
   token ->
   Server LiveViewApi
@@ -98,7 +98,7 @@ serveServantLiveView debugPrint basePage rootId store lv token =
     initialRenderEndpoint = liftIO $ do
       (case basePage of
          DefaultBasePage scriptData -> defaultBasePage rootId scriptData
-         CustomBasePage f -> f) <$> atomically init
+         CustomBasePage f -> f) <$> init
     liveRenderEndpoint conn = liftIO (live conn)
     (init, _) =
       serveLiveView

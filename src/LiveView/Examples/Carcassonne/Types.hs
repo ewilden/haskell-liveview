@@ -213,7 +213,7 @@ instance HasGameRoomContext AppContext where
 instance HasGameState AppContext where
   gameState = grGameState
 
-type CarcassoneStateStore = StateStore SessionId
+type CarcassoneStateStore = StateStore IO SessionId
   (GameRoomContext -> GameRoomContext)
   GameRoomContext
 
@@ -240,6 +240,7 @@ makeClassy ''ServerContext
 instance
   HasStateStore
     ServerContext
+    IO
     SessionId
     (GameRoomContext -> GameRoomContext)
     GameRoomContext

@@ -133,22 +133,20 @@ checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
                 Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
 checkCreds cookieSettings jwtSettings srvCtxt user = do
     maySessid <- liftIO $ do
-      g <- getSplit
-      atomically $ flip evalRandT g $ do 
-        userEntry <- lift $ StmMap.lookup user (srvCtxt ^. scUserSet)
-        case userEntry of
-          Nothing -> do
-            let getsessid = do
-                  candidate <- getRandom <&> abs <&> fromString @T.Text . take 16 . show @Int
-                  exists <- lift $ (srvCtxt ^. scStateStore . existsState) $ SessionId candidate
-                  if exists then getsessid else pure candidate
-            sessid <- getsessid
-            lift $ StmMap.insert () user (srvCtxt ^. scUserSet)
-            lift $ _mutateState (srvCtxt ^. scStateStore) (SessionId sessid) (\grc ->
-              let currNumPlayers = grc ^. userId2Player . to HM.size
-              in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
-            pure (Just sessid)
-          Just () -> pure Nothing
+      userEntry <- atomically $ StmMap.lookup user (srvCtxt ^. scUserSet)
+      case userEntry of
+        Nothing -> do
+          let getsessid = do
+                candidate <- getRandom <&> abs <&> fromString @T.Text . take 16 . show @Int
+                exists <- (srvCtxt ^. scStateStore . existsState) $ SessionId candidate
+                if exists then getsessid else pure candidate
+          sessid <- getsessid
+          atomically $ StmMap.insert () user (srvCtxt ^. scUserSet)
+          _mutateState (srvCtxt ^. scStateStore) (SessionId sessid) (\grc ->
+            let currNumPlayers = grc ^. userId2Player . to HM.size
+            in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
+          pure (Just sessid)
+        Just () -> pure Nothing
     case maySessid of
       Nothing -> throwError err401 { errBody = "Username already taken." }
       Just sessid -> do
@@ -163,12 +161,13 @@ api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
 initServerContext = liftIO $ do
-  g <- getSplit
-  atomically $ flip evalRandT g $ do
-    initGRC <- (initGameRoomContext :: RandT StdGen STM GameRoomContext)
-    stateStore' <- lift $ inMemoryStateStore (pure initGRC)
-    stmm <- lift StmMap.new
-    pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
+  stateStore' <- inMemoryStateStore atomically initGameRoomContext
+  stmm <- StmMap.newIO
+  pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
+  -- atomically $ do
+  --   stateStore' <- lift $ inMemoryStateStore (atomically $ evalRandT initGameRoomContext)
+  --   stmm <- lift StmMap.new
+  --   pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
 
 server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
 server' cookieSettings jwtSettings servCtxt =

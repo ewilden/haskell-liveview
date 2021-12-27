@@ -59,7 +59,7 @@ type API = LiveViewApi :<|> Raw
 api :: Proxy API
 api = Proxy
 
-server :: StateStore () (AppState -> AppState) AppState -> Server API
+server :: StateStore IO () (AppState -> AppState) AppState -> Server API
 server store = (serveServantLiveView
                putStrLn
                (DefaultBasePage $ ScriptData
@@ -71,9 +71,9 @@ server store = (serveServantLiveView
                sampleLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
-initStateStore :: IO (StateStore () (AppState -> AppState) AppState)
-initStateStore = lmap mapper <$> atomically (inMemoryStateStore (pure (1, Add, 1)))
-  where mapper :: (AppState -> AppState) -> (AppState -> WithAction STM.STM AppState)
+initStateStore :: IO (StateStore IO () (AppState -> AppState) AppState)
+initStateStore = lmap mapper <$> (inMemoryStateStore atomically (pure (1, Add, 1)))
+  where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
         mapper = (intoWithAction . )
 
 main :: IO ()

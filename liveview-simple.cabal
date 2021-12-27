@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 984054bbfc0ccfed3affa2256c4d846a0e1f9bb2742bf59620cac74624dc1575
+-- hash: 91d7b5da3ec59c7996094dd0f274112306e656a8bb2c3fad857d749abe582426
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -128,6 +128,7 @@ library
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
     , wai
     , wai-websockets
     , warp
@@ -226,6 +227,7 @@ executable liveview-simple-exe
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
     , wai
     , wai-websockets
     , warp
@@ -325,6 +327,7 @@ test-suite liveview-simple-test
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
     , wai
     , wai-websockets
     , warp
