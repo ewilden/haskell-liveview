@@ -4,7 +4,7 @@ module LiveView.Examples.Calculator where
 
 import Control.Concurrent.Async qualified as Async
 import Control.Concurrent.STM qualified as STM
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, STM)
 import Control.Lens
 import Control.Lens.Operators
 import Control.Monad.Reader
@@ -72,9 +72,12 @@ server store = (serveServantLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
 initStateStore :: IO (StateStore IO () (AppState -> AppState) AppState)
-initStateStore = lmap mapper <$> (inMemoryStateStore atomically (pure (1, Add, 1)))
-  where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
-        mapper = (intoWithAction . )
+initStateStore = atomically $ do
+  store <- inMemoryStateStore id (pure (1, Add, 1))
+  pure $ lmap (intoWithAction . ) $ hoistM atomically store
+  -- lmap (intoWithAction . ) store
+  -- where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
+  --       mapper = (intoWithAction . )
 
 main :: IO ()
 main = do

@@ -118,24 +118,14 @@ instance (Monad m) => Profunctor (StateStore m token) where
       del
       exists
 
-getOrInit :: (Eq k, Ord k, Hashable k) => STM a -> k -> StmMap.Map k a -> STM a
-getOrInit def k m = do
-  mayV <- liftBase $ StmMap.lookup k m
-  case mayV of
-    Nothing -> do
-      v <- def
-      liftBase $ StmMap.insert v k m >> pure v
-    Just v -> pure v
-
-getOrInitM ::
-  (Eq k, Ord k, Hashable k) =>
-  IO a ->
-  k ->
-  StmMap.Map k a ->
-  IO a
-getOrInitM mdef k m = do
-  def <- mdef
-  atomically $ getOrInit (pure def) k m
+hoistM :: (Monad m, Monad n) => (forall a. m a -> n a) -> StateStore m token mutator state -> StateStore n token mutator state
+hoistM f (StateStore sub mut del ext) = StateStore
+  (\tok -> do
+      (h,tl) <- f $ sub tok
+      pure (h, hoist f tl))
+  (f .: mut)
+  (f . del)
+  (f . ext)
 
 inMemoryStateStore ::
   forall state k m.
@@ -281,11 +271,6 @@ runLiveView lv s bs =
       writerT' :: WriterT (BindingMap mutator) STM (Html (), BindingState)
       writerT' = runStateT stateT' bs
   in runWriterT writerT'
-  -- L.commuteHtmlT lv
-    -- & runRenderer
-    -- & flip runReaderT s
-    -- & flip runStateT bs
-    -- & flip runWriterT
 
 
 serveLiveView :: forall token mutator state.

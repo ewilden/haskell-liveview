@@ -160,14 +160,14 @@ api :: Proxy (API '[Cookie])
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
-initServerContext = liftIO $ do
-  stateStore' <- inMemoryStateStore atomically initGameRoomContext
-  stmm <- StmMap.newIO
-  pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
-  -- atomically $ do
-  --   stateStore' <- lift $ inMemoryStateStore (atomically $ evalRandT initGameRoomContext)
-  --   stmm <- lift StmMap.new
-  --   pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
+initServerContext = do
+  liftIO $ runIntoIO $ do
+    stateStore' <- inMemoryStateStore lift (initGameRoomContext @(RandT StdGen STM))
+    stmm <- lift StmMap.new
+    pure $ ServerContext (hoistM runIntoIO $ lmap (intoWithAction .) stateStore') stmm
+  where runIntoIO ma = do
+          g <- getSplit
+          atomically $ evalRandT ma g
 
 server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
 server' cookieSettings jwtSettings servCtxt =
