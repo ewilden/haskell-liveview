@@ -185,7 +185,13 @@ makeClassy ''GameState
 instance HasBoard GameState where
   board = gameBoard
 
-newtype SessionId = SessionId Text deriving (Show, Eq, Ord, Hashable)
+newtype SessionId = SessionId { sessionId :: Text } deriving (Show, Eq, Ord, Hashable, Generic)
+instance ToJSON SessionId
+instance ToJWT SessionId
+instance FromJSON SessionId
+instance FromJWT SessionId
+instance FromForm SessionId
+
 newtype UserId = UserId Text deriving (Show, Eq, Ord, Hashable)
 
 data GameRoomContext = GameRoomContext

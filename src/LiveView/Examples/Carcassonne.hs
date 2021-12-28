@@ -122,14 +122,35 @@ type Post303 (cts :: [*]) (hs :: [*]) a =
 
 type API auths
   = (Auth auths User :> "session" :> Capture "sessionid" T.Text :> LiveViewApi)
-  :<|> (Auth auths User :> "join" :> Capture "sessionid" T.Text :> Post303 '[JSON] '[] NoContent)
+  :<|> (Auth auths User :> "join" :> ReqBody '[FormUrlEncoded] SessionId :> Post303 '[JSON] '[] NoContent)
   :<|> ("login" :> ReqBody '[FormUrlEncoded] User :> Post303 '[JSON]
           '[ Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie]
             NoContent)
   :<|> Get '[HTML] (Html ())
+  :<|> "lobby" :> Get '[HTML] (Html ())
   :<|> Raw
 
 -- See https://github.com/haskell-servant/servant-auth/issues/146#issuecomment-660490703
+
+joinSession :: ServerContext -> AuthResult User -> SessionId -> Handler (Headers '[ Header "Location" T.Text] NoContent)
+joinSession servCtxt authResult (SessionId sessId) = case authResult of
+  Authenticated User { name } -> do
+    eith <- liftIO $ runRandSTMIntoIO $ do
+      (curr, _) <- (servCtxt ^. stateStore . subscribeState) $ SessionId sessId
+      let sessNumPlayers = curr ^. userId2Player . to HM.size
+      if sessNumPlayers < 5
+          then do
+            _mutateState (servCtxt ^. stateStore) (SessionId sessId) $ userId2Player . at (UserId name) ?~ PlayerIndex (fromIntegral sessNumPlayers)
+            pure $ Right ()
+          else pure $ Left err403
+      pure $ Right ()
+    case eith of
+      Right () -> pure ()
+      Left e -> throwError e
+    pure $ (addHeader ("/session/" <> sessId) NoContent)
+  _ -> do
+    liftIO $ print "Failed to auth joinSession"
+    throwError err401
 
 checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
            -> Handler (Headers '[ Header "Location" T.Text,
@@ -189,23 +210,7 @@ server' cookieSettings jwtSettings servCtxt =
           (\ f grc -> f (AppContext grc (UserId name)) ^. gameRoomContext)
           liveView) . SessionId)
       _ -> const (throwError err401 :<|> Tagged (\req resp -> resp forbidden))
-  ) :<|> (\case
-      Authenticated User { name } -> (\sessId -> do
-        -- TODO: check / add user to session. Perhaps this is done now?
-        eith <- liftIO $ runRandSTMIntoIO $ do
-          (curr, _) <- (servCtxt ^. stateStore . subscribeState) $ SessionId sessId
-          let sessNumPlayers = curr ^. userId2Player . to HM.size
-          if sessNumPlayers < 5
-              then do
-                _mutateState (servCtxt ^. stateStore) (SessionId sessId) $ userId2Player . at (UserId name) ?~ PlayerIndex (fromIntegral sessNumPlayers)
-                pure $ Right ()
-              else pure $ Left err403
-          pure $ Right ()
-        case eith of
-          Right () -> pure ()
-          Left e -> throwError e
-        pure $ addHeader ("/session/" <> sessId) NoContent)
-      _ -> const (throwError err401))
+  ) :<|> joinSession servCtxt
     :<|> checkCreds cookieSettings jwtSettings servCtxt
     :<|> pure (doctypehtml_ $
                 form_ [action_ "/login", method_ "POST"] $ do
@@ -213,6 +218,11 @@ server' cookieSettings jwtSettings servCtxt =
                     input_ [name_ "name", placeholder_ "Pick a name"]
                   div_ $ button_ "Login"
                       )
+    :<|> pure (doctypehtml_ $
+                form_ [action_ "/join", method_ "POST"] $ do
+                  div_ $ do
+                    input_ [name_ "sessionId", placeholder_ "Session ID"]
+                  div_ $ button_ "Join")
     :<|> serveDirectoryWebApp "static"
 
 main :: IO ()
@@ -223,9 +233,10 @@ main = do
       cooks = defaultCookieSettings {
         cookieIsSecure = NotSecure,
         cookieSameSite = SameSiteStrict,
-        cookieXsrfSetting = Just defaultXsrfCookieSettings {
-          xsrfExcludeGet = True
-        }
+        cookieXsrfSetting = Nothing
+        -- cookieXsrfSetting = Just defaultXsrfCookieSettings {
+        --   xsrfExcludeGet = True
+        -- }
       }
       cfg = cooks :. jwtCfg :. EmptyContext
   Warp.run 5000 (serveWithContext api cfg (server' defaultCookieSettings jwtCfg servCtxt))

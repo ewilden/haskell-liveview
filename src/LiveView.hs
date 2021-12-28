@@ -132,6 +132,7 @@ hoistM f (StateStore sub mut del ext) = StateStore
 inMemoryStateStore ::
   forall state k m.
   (Eq k, Ord k, Hashable k, Monad m) =>
+  -- consider making this a MonadBase STM constraint instead.
   (forall a. STM a -> m a) ->
   m state ->
   m (StateStore m k (state -> WithAction m state) state)
