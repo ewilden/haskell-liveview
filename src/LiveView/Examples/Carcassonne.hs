@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
@@ -43,6 +44,7 @@ import StmContainers.Map qualified as StmMap
 import Streaming
 import Streaming.Prelude qualified as S
 import Web.FormUrlEncoded
+import Web.Simple.Responses (forbidden)
 
 liveView :: LiveView AppContext (AppContext -> AppContext)
 liveView = do
@@ -68,10 +70,10 @@ liveView = do
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
   me <- asks myPlayerIndex
-  when (me /= player) $ div_ [class_ "current-turn"] $ do
+  when (me /= player) $ div_ [class_ "current-turn"] $
     "Not your turn!"
   when (me == player) $ dimapLiveView id (\m -> gameState %~ reducer m) $
-    div_ [class_ "current-turn"] $ do
+    div_ [class_ "current-turn"] $
 
       case phase of
         PhaseTile -> do
@@ -120,6 +122,7 @@ type Post303 (cts :: [*]) (hs :: [*]) a =
 
 type API auths
   = (Auth auths User :> "session" :> Capture "sessionid" T.Text :> LiveViewApi)
+  :<|> (Auth auths User :> "join" :> Capture "sessionid" T.Text :> Post303 '[JSON] '[] NoContent)
   :<|> ("login" :> ReqBody '[FormUrlEncoded] User :> Post303 '[JSON]
           '[ Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie]
             NoContent)
@@ -138,7 +141,7 @@ checkCreds cookieSettings jwtSettings srvCtxt user = do
         Nothing -> do
           let getsessid = do
                 candidate <- getRandom <&> abs <&> fromString @T.Text . take 16 . show @Int
-                exists <- (srvCtxt ^. scStateStore . existsState) $ SessionId candidate
+                exists <- srvCtxt ^. scStateStore . existsState $ SessionId candidate
                 if exists then getsessid else pure candidate
           sessid <- getsessid
           atomically $ StmMap.insert () user (srvCtxt ^. scUserSet)
@@ -160,19 +163,19 @@ api :: Proxy (API '[Cookie])
 api = Proxy
 
 initServerContext :: (MonadIO m) => m ServerContext
-initServerContext = do
+initServerContext =
   liftIO $ runIntoIO $ do
-    stateStore' <- inMemoryStateStore lift (initGameRoomContext @(RandT StdGen STM))
-    stmm <- lift StmMap.new
-    pure $ ServerContext (hoistM runIntoIO $ lmap (intoWithAction .) stateStore') stmm
+  stateStore' <- inMemoryStateStore lift (initGameRoomContext @(RandT StdGen STM))
+  stmm <- lift StmMap.new
+  pure $ ServerContext (hoistM runIntoIO $ lmap (intoWithAction .) stateStore') stmm
   where runIntoIO ma = do
           g <- getSplit
           atomically $ evalRandT ma g
 
 server' :: CookieSettings -> JWTSettings -> ServerContext -> Server (API auths)
 server' cookieSettings jwtSettings servCtxt =
-  ( \authRes -> trace (show authRes) $ case authRes of
-      Authenticated User { name } -> (\sessId -> serveServantLiveView
+  ( \case
+      Authenticated User { name } -> (serveServantLiveView
         putStrLn
         ( DefaultBasePage $
             ScriptData
@@ -182,19 +185,22 @@ server' cookieSettings jwtSettings servCtxt =
         )
         "lvroot"
         (servCtxt ^. stateStore)
-        (dimapLiveView (`AppContext` (UserId name))
+        (dimapLiveView (`AppContext` UserId name)
           (\ f grc -> f (AppContext grc (UserId name)) ^. gameRoomContext)
-          liveView)
-        (SessionId sessId))
-      _ -> const (throwError err401 :<|> undefined)
-  )
+          liveView) . SessionId)
+      _ -> const (throwError err401 :<|> Tagged (\req resp -> resp forbidden))
+  ) :<|> (\case
+      Authenticated User { name } -> (\sessId -> do
+        -- TODO: check / add user to session
+        pure $ addHeader ("/session/" <> sessId) NoContent)
+      _ -> const (throwError err401))
     :<|> checkCreds cookieSettings jwtSettings servCtxt
-    :<|> pure (doctypehtml_ $ do
-      form_ [action_ "/login", method_ "POST"] $ do
-        div_ $ do
-          input_ [name_ "name", placeholder_ "Pick a name"]
-        div_ $ button_ "Login"
-      )
+    :<|> pure (doctypehtml_ $
+                form_ [action_ "/login", method_ "POST"] $ do
+                  div_ $ do
+                    input_ [name_ "name", placeholder_ "Pick a name"]
+                  div_ $ button_ "Login"
+                      )
     :<|> serveDirectoryWebApp "static"
 
 main :: IO ()

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 91d7b5da3ec59c7996094dd0f274112306e656a8bb2c3fad857d749abe582426
+-- hash: 1dad3f68a9cf47db8cbf9a62887eb03dc0fc1176437af773a7c7df11b074f41e
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -119,6 +119,7 @@ library
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
@@ -218,6 +219,7 @@ executable liveview-simple-exe
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
@@ -318,6 +320,7 @@ test-suite liveview-simple-test
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
