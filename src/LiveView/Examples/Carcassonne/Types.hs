@@ -4,9 +4,10 @@
 
 module LiveView.Examples.Carcassonne.Types where
 
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, STM)
 import Control.Concurrent.STM qualified as STM
 import Control.Lens
+import Control.Monad.Random.Strict (RandT, StdGen, MonadSplit (getSplit), evalRandT)
 import Data.HashMap.Strict (HashMap)
 import Data.Hashable
 import Data.List.NonEmpty
@@ -213,9 +214,14 @@ instance HasGameRoomContext AppContext where
 instance HasGameState AppContext where
   gameState = grGameState
 
-type CarcassoneStateStore = StateStore IO SessionId
+type CarcassoneStateStore = StateStore (RandT StdGen STM) SessionId
   (GameRoomContext -> GameRoomContext)
   GameRoomContext
+
+runRandSTMIntoIO :: RandT StdGen STM a -> IO a
+runRandSTMIntoIO ma = do
+  g <- getSplit
+  evalRandT ma g & atomically
 
 
 newtype User = User { name :: Text }
@@ -240,7 +246,7 @@ makeClassy ''ServerContext
 instance
   HasStateStore
     ServerContext
-    IO
+    (RandT StdGen STM)
     SessionId
     (GameRoomContext -> GameRoomContext)
     GameRoomContext

@@ -1,7 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module LiveView where
@@ -176,11 +178,11 @@ inMemoryStateStore liftSTM mkState = do
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 
-newtype Renderer state mutator a = Renderer
+newtype Renderer state mutator m a = Renderer
   { runRenderer ::
       ReaderT
         state
-        (StateT BindingState (WriterT (BindingMap mutator) STM))
+        (StateT BindingState (WriterT (BindingMap mutator) m))
         a
   }
   deriving
@@ -192,38 +194,44 @@ newtype Renderer state mutator a = Renderer
       MonadWriter (BindingMap mutator)
     )
 
-newtype WrappedRenderer a state mutator = WrappedRenderer
-  { unwrapRenderer :: Renderer state mutator a
+instance MonadTrans (Renderer state mutator) where
+  lift :: (Monad m) => m a -> Renderer state mutator m a
+  lift ma = Renderer $ lift $ lift $ lift ma
+
+instance MFunctor (Renderer state mutator) where
+  hoist :: Monad m => (forall a. m a -> n a) -> Renderer state mutator m b -> Renderer state mutator n b
+  hoist f (Renderer readStateWriterMa) = Renderer $ hoist (hoist (hoist f)) readStateWriterMa
+
+newtype WrappedRenderer m a state mutator = WrappedRenderer
+  { unwrapRenderer :: Renderer state mutator m a
   }
 
-instance Profunctor (WrappedRenderer a) where
+instance (Monad m) => Profunctor (WrappedRenderer m a) where
   rmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $
-    Renderer $ hoist (hoist $ mapWriterT mapper) readT
-      where mapper x = fmap (fmap (fmap f)) x
+    Renderer $ hoist (hoist (mapWriterT (\mpair -> do
+      (a, bindMap) <- mpair
+      pure (a, f <$> bindMap)
+      ))) readT
   lmap f (WrappedRenderer (Renderer readT)) = WrappedRenderer $ Renderer $
     withReaderT f readT
 
-class (Monad m) => MonadRenderer state mutator m | m -> state, m -> mutator where
-  liftRenderer :: Renderer state mutator a -> m a
-
-instance MonadRenderer state mutator (Renderer state mutator) where
-  liftRenderer = id
-
-instance
-  (Monad (t m), MonadRenderer state mutator m, MonadTrans t) =>
-  MonadRenderer state mutator (t m)
-  where
-  liftRenderer = lift . liftRenderer
-
-type LiveView state mutator = L.HtmlT (Renderer state mutator) ()
+type LiveViewT state mutator m a = L.HtmlT (Renderer state mutator m) a
+type LiveView state mutator = LiveViewT state mutator STM ()
 
 newtype WrappedLiveView state mutator = WrappedLiveView
   { unwrapLiveView :: LiveView state mutator
   }
 
 instance Profunctor WrappedLiveView where
-  dimap f g (WrappedLiveView x) = WrappedLiveView $ hoist dimap' x
-    where dimap' = unwrapRenderer . dimap f g . WrappedRenderer
+  dimap :: forall a b c d. (a -> b) -> (c -> d) -> WrappedLiveView b c -> WrappedLiveView a d
+  dimap f g (WrappedLiveView x) = 
+    WrappedLiveView $ hoist morphRend x
+    where 
+      morphRend :: Renderer b c STM e -> Renderer a d STM e
+      morphRend rend = 
+            let wrappedRend = WrappedRenderer rend
+            in unwrapRenderer $ dimap f g wrappedRend
+    -- where dimap' = unwrapRenderer . dimap f g . WrappedRenderer
 
 dimapLiveView
   :: (state -> b)
@@ -242,11 +250,11 @@ toSettingMutator lv = do
   dimapLiveView id ($ a) lv
 
 addActionBinding ::
-  (MonadRenderer s mutator m) =>
+  (Monad m) =>
   T.Text ->
   (BindingCall -> mutator) ->
-  m Hsaction
-addActionBinding event callback = liftRenderer $ do
+  LiveViewT state mutator m Hsaction
+addActionBinding event callback = do
   seed <- bindingIdSeed <<%= (+ 1)
   tell $ BindingMap $ MonoidalIntMap.singleton seed [callback]
   pure $ makeHsaction event (tshow seed)
@@ -262,7 +270,7 @@ runLiveView :: forall state mutator.
   BindingState ->
   STM ((Html (), BindingState), BindingMap mutator)
 runLiveView lv s bs =
-  let rendOfHtml :: Renderer state mutator (Html ())
+  let rendOfHtml :: Renderer state mutator STM (Html ())
       rendOfHtml = L.commuteHtmlT lv
       ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) STM)) (Html ())
       ranRend = runRenderer rendOfHtml

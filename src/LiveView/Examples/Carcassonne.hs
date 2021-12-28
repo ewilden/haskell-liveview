@@ -135,8 +135,8 @@ checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
            -> Handler (Headers '[ Header "Location" T.Text,
                 Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
 checkCreds cookieSettings jwtSettings srvCtxt user = do
-    maySessid <- liftIO $ do
-      userEntry <- atomically $ StmMap.lookup user (srvCtxt ^. scUserSet)
+    maySessid <- liftIO $ runRandSTMIntoIO $ do
+      userEntry <- lift $ StmMap.lookup user (srvCtxt ^. scUserSet)
       case userEntry of
         Nothing -> do
           let getsessid = do
@@ -144,7 +144,7 @@ checkCreds cookieSettings jwtSettings srvCtxt user = do
                 exists <- srvCtxt ^. scStateStore . existsState $ SessionId candidate
                 if exists then getsessid else pure candidate
           sessid <- getsessid
-          atomically $ StmMap.insert () user (srvCtxt ^. scUserSet)
+          lift $ StmMap.insert () user (srvCtxt ^. scUserSet)
           _mutateState (srvCtxt ^. scStateStore) (SessionId sessid) (\grc ->
             let currNumPlayers = grc ^. userId2Player . to HM.size
             in  grc & userId2Player . at (UserId $ name user) ?~ PlayerIndex (fromIntegral currNumPlayers))
@@ -167,7 +167,7 @@ initServerContext =
   liftIO $ runIntoIO $ do
   stateStore' <- inMemoryStateStore lift (initGameRoomContext @(RandT StdGen STM))
   stmm <- lift StmMap.new
-  pure $ ServerContext (hoistM runIntoIO $ lmap (intoWithAction .) stateStore') stmm
+  pure $ ServerContext (lmap (intoWithAction .) stateStore') stmm
   where runIntoIO ma = do
           g <- getSplit
           atomically $ evalRandT ma g
@@ -184,14 +184,26 @@ server' cookieSettings jwtSettings servCtxt =
               }
         )
         "lvroot"
-        (servCtxt ^. stateStore)
+        (hoistM runRandSTMIntoIO $ servCtxt ^. stateStore)
         (dimapLiveView (`AppContext` UserId name)
           (\ f grc -> f (AppContext grc (UserId name)) ^. gameRoomContext)
           liveView) . SessionId)
       _ -> const (throwError err401 :<|> Tagged (\req resp -> resp forbidden))
   ) :<|> (\case
       Authenticated User { name } -> (\sessId -> do
-        -- TODO: check / add user to session
+        -- TODO: check / add user to session. Perhaps this is done now?
+        eith <- liftIO $ runRandSTMIntoIO $ do
+          (curr, _) <- (servCtxt ^. stateStore . subscribeState) $ SessionId sessId
+          let sessNumPlayers = curr ^. userId2Player . to HM.size
+          if sessNumPlayers < 5
+              then do
+                _mutateState (servCtxt ^. stateStore) (SessionId sessId) $ userId2Player . at (UserId name) ?~ PlayerIndex (fromIntegral sessNumPlayers)
+                pure $ Right ()
+              else pure $ Left err403
+          pure $ Right ()
+        case eith of
+          Right () -> pure ()
+          Left e -> throwError e
         pure $ addHeader ("/session/" <> sessId) NoContent)
       _ -> const (throwError err401))
     :<|> checkCreds cookieSettings jwtSettings servCtxt
