@@ -23,7 +23,7 @@ import LiveView.Examples.Carcassonne.Reducer
 import Data.Tuple (swap)
 import Data.Functor ((<&>))
 import Control.Lens
-import Data.List (sortOn, findIndex, elemIndex, foldl')
+import Data.List (sortOn, findIndex, elemIndex, foldl', sort)
 import Data.Either (isRight)
 
 prop_diffThenPatchIsIdentity :: Property
@@ -214,7 +214,7 @@ genGameState = Gen.recursive Gen.choice
 
 genGameStateSatisfying :: (MonadGen m) => (GameState -> Bool) -> m GameState
 genGameStateSatisfying f = do
-  let go gs = 
+  let go gs =
         if f gs then pure gs
         else do
           msgs <- genMessages gs
@@ -243,8 +243,40 @@ prop_alwaysPlaceable = property $ do
         guard $ not $ null (possiblePlacements (gs ^. gameBoard) tile)
   assert isPlaceable
 
+prop_canPlaceMeepleOnGloballyUnmeepledTerrain :: Property
+prop_canPlaceMeepleOnGloballyUnmeepledTerrain = property $ do
+  let selector :: GameState -> Maybe ((Int, Int), [SideTerrain])
+      selector gs = (case gs ^. gameWhoseTurn . whoseTurnPhase of
+        PhasePlaceMeeple loc ->
+          let tile = gs ^?! xyToTile . ix loc
+              sideTerrains = foldr (:) [] $ tile ^. sides
+              globallyUnmeepledTerrains = filter (/= Field) $ flip filter sideTerrains $ \terr ->
+                flip all (gs ^. xyToTile . to HM.elems) $ \tile -> isNothing $ do
+                  (mplc, _) <- tile ^. tileMeeplePlacement
+                  case mplc of
+                    PlaceSide lrudOne -> if tile ^. sides . toLRUDLens lrudOne == terr then Just () else Nothing
+                    _ -> Nothing
+          in if null globallyUnmeepledTerrains then Nothing else Just (loc, globallyUnmeepledTerrains)
+        _ -> Nothing)
+  gs <- forAll $ genGameStateSatisfying (isJust . selector)
+  let Just (loc, relevantGloballyUnmeepledTerrains) = selector gs
+  let placements = validMeeplePlacements loc gs
+      tile = gs ^?! xyToTile . ix loc
+  sort (mapMaybe (\case PlaceSide lrudOne -> if (tile ^. sides . toLRUDLens lrudOne) `elem` relevantGloballyUnmeepledTerrains
+                                               then Just $ tile ^. sides . toLRUDLens lrudOne
+                                               else Nothing
+                        _ -> Nothing) placements
+        ) === sort relevantGloballyUnmeepledTerrains
+
 tests :: IO Bool
 tests = checkParallel $$(discover)
 
 main :: IO Bool
 main = tests
+
+{- 
+Current failures:
+recheck (Size 91) (Seed 1195665561685055342 12918760422426807891) prop_alwaysPlaceable
+recheck (Size 48) (Seed 4493440989694573018 16655293125463297363) prop_canPlaceMeepleOnGloballyUnmeepledTerrain
+
+-}

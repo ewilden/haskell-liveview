@@ -71,7 +71,7 @@ initGameState shuffle numPlayers = do
 initGameRoomContext :: (MonadRandom m) => m GameRoomContext
 initGameRoomContext = do
   gameState <- initGameState shuffle (NumPlayers 2)
-  pure $ GameRoomContext 
+  pure $ GameRoomContext
     { _makeTileImageUrl = \(TileImage name ccwRotates) ->
         let suffix = case ccwRotates `mod` 4 of
               0 -> ""
@@ -208,8 +208,12 @@ validMeeplePlacements loc gs =
             let hasMeeple :: TerrainGraphKey -> Bool
                 hasMeeple = \case
                   TerrainGraphKey loc' lrudOne' -> Just True == (do
-                    mplace <- gs ^? board . xyToTile . ix loc' . tileMeeplePlacement
-                    True <$ mplace)
+                    tile' <- gs ^? board . xyToTile . ix loc'
+                    (mplace, _)  <- tile' ^. tileMeeplePlacement
+                    case mplace of
+                      PlaceMonastery -> pure False
+                      PlaceAbbot -> pure False
+                      PlaceSide lrudOne' -> pure $ tile' ^. sides . toLRUDLens lrudOne' == sideTerrain)
                   TerrainEmptyKey -> False
             [PlaceSide lrudOne | not (any hasMeeple myTcc)]
       centerPlacements = do
@@ -264,7 +268,7 @@ tryCollectMonastery mcm loc gs = do
               IncompleteAbbot -> 0
         if numFilled >= countNeeded then pure $
           gs & gameBoard . xyToTile . ix loc . tileMeeplePlacement .~ Nothing
-            & gameScores . ix playerIndex .~ Score numFilled
+            & (gameScores . at playerIndex) %~ Just . maybe (Score numFilled) (+ Score numFilled)
           else Left "Insufficiently filled")
   case (tile ^. tileMeeplePlacement, mcm) of
     (Just (PlaceMonastery, playerIndex), CompleteMeeple) -> continue playerIndex
@@ -350,12 +354,12 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
     (Just loc) -> do
       let mayPlace = gs ^? board . xyToTile . ix loc . tileMeeplePlacement . _Just
           currPlayer = gs ^. gameWhoseTurn . whoseTurnPlayer
-      unless (mayPlace == Just (PlaceAbbot, currPlayer)) 
+      unless (mayPlace == Just (PlaceAbbot, currPlayer))
         $ Left "That player doesn't have an Abbot there"
       advanceTurn <$> tryCollectMonastery IncompleteAbbot loc gs
   (PhaseTakeAbbot, _) -> Left "Message n/a for PhaseTakeAbbot"
   (PhaseGameOver, _) -> Left "Message n/a for PhaseGameOver"
-  where 
+  where
     (NumPlayers numPlayers) = gs ^. gameNumPlayers
     advanceTurn gs' =
       let gs'' = gs' & gameWhoseTurn . whoseTurnPhase .~ PhaseTile
@@ -364,7 +368,7 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
             [] -> s & gameWhoseTurn . whoseTurnPhase .~ PhaseGameOver
             (x:xs) -> if null (possiblePlacements (gs ^. gameBoard) x)
                         then step (s & gameTiles %~ drop 1)
-                        else s & gameTiles %~ drop 1
+                        else s
       in step gs''
 
 reducer :: Message -> GameState -> GameState
