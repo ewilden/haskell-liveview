@@ -260,7 +260,7 @@ prop_canPlaceMeepleOnGloballyUnmeepledTerrain = property $ do
         _ -> Nothing)
   gs <- forAll $ genGameStateSatisfying (isJust . selector)
   let Just (loc, relevantGloballyUnmeepledTerrains) = selector gs
-  let placements = validMeeplePlacements loc gs
+      placements = validMeeplePlacements loc gs
       tile = gs ^?! xyToTile . ix loc
   sort (mapMaybe (\case PlaceSide lrudOne -> if (tile ^. sides . toLRUDLens lrudOne) `elem` relevantGloballyUnmeepledTerrains
                                                then Just $ tile ^. sides . toLRUDLens lrudOne
@@ -272,7 +272,10 @@ tests :: IO Bool
 tests = checkParallel $$(discover)
 
 main :: IO Bool
-main = tests
+main = do
+  recheck (Size 91) (Seed 1195665561685055342 12918760422426807891) prop_alwaysPlaceable
+  recheck (Size 48) (Seed 4493440989694573018 16655293125463297363) prop_canPlaceMeepleOnGloballyUnmeepledTerrain
+  tests
 
 {- 
 Current failures:

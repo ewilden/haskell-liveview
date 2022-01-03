@@ -105,8 +105,19 @@ liveView = do
           button_ [hsaction_ noPlaceMeeple] "skip"
         PhaseTakeAbbot -> do
           "Take abbot?"
+          gs <- view gameState
+          me <- asks myPlayerIndex
           let mkTakeAbbot mayLoc = addActionBinding "click"
                   (\_ -> TakeAbbot mayLoc)
+              mayAbbot = flip ifind (gs ^. xyToTile) $ \loc tile -> case tile ^. tileMeeplePlacement of
+                Nothing -> False
+                Just (PlaceAbbot, pi) -> pi == me
+                _ -> False
+          case mayAbbot of
+            Just (loc, _) -> do
+              takeAbbot <- mkTakeAbbot $ Just loc
+              button_ [hsaction_ takeAbbot] "take abbot"
+            Nothing -> pure ()
           noTakeAbbot <- mkTakeAbbot Nothing
           button_ [hsaction_ noTakeAbbot] "skip"
         PhaseGameOver -> "Game over!"
