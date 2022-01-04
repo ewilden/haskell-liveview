@@ -4,7 +4,7 @@ module LiveView.Examples.Calculator where
 
 import Control.Concurrent.Async qualified as Async
 import Control.Concurrent.STM qualified as STM
-import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM (atomically, STM)
 import Control.Lens
 import Control.Lens.Operators
 import Control.Monad.Reader
@@ -27,7 +27,9 @@ import Text.Read
 
 data Op = Add | Subtract | Multiply | Divide deriving (Eq, Show, Read)
 
-sampleLiveView :: LiveView (Float, Op, Float)
+type AppState = (Float, Op, Float)
+
+sampleLiveView :: LiveView AppState (AppState -> AppState)
 sampleLiveView = do
   (x, op, y) <- ask
   let parseVal (BindingCall mayVal) = do
@@ -57,7 +59,7 @@ type API = LiveViewApi :<|> Raw
 api :: Proxy API
 api = Proxy
 
-server :: StateStore () (Float, Op, Float) -> Server API
+server :: StateStore IO () (AppState -> AppState) AppState -> Server API
 server store = (serveServantLiveView
                putStrLn
                (DefaultBasePage $ ScriptData
@@ -69,8 +71,13 @@ server store = (serveServantLiveView
                sampleLiveView
                ()) :<|> serveDirectoryWebApp "static"
 
-initStateStore :: IO (StateStore () (Float, Op, Float))
-initStateStore = inMemoryStateStore (pure (1, Add, 1))
+initStateStore :: IO (StateStore IO () (AppState -> AppState) AppState)
+initStateStore = atomically $ do
+  store <- inMemoryStateStore id (pure (1, Add, 1))
+  pure $ lmap (intoWithAction . ) $ hoistM atomically store
+  -- lmap (intoWithAction . ) store
+  -- where mapper :: (AppState -> AppState) -> (AppState -> WithAction IO AppState)
+  --       mapper = (intoWithAction . )
 
 main :: IO ()
 main = do

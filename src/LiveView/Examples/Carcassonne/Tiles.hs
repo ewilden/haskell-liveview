@@ -9,26 +9,22 @@
 module LiveView.Examples.Carcassonne.Tiles where
 
 import Control.Lens
+import Control.Monad (join)
 import Control.Monad.Random.Strict
 import Control.Monad.Reader
-import Control.Monad.State
-import Data.HashMap.Strict (HashMap)
 import Data.HashMap.Strict qualified as HM
-import Data.Kind (Constraint)
 import Data.List
 import Data.String
 import Data.Text (Text)
-import GHC.TypeLits (ErrorMessage (..), TypeError)
 import Import
 import LiveView
 import LiveView.Examples.Carcassonne.Types
 import LiveView.Html
 import Lucid
-import System.Random
-import System.Random.Stateful
 
 ts :: Text -> (SideTerrain, SideTerrain, SideTerrain, SideTerrain) -> MiddleTerrain -> Int -> (Tile, Int)
-ts t sides middle frequency = (Tile (fromTuple sides) middle (TileImage t 0), frequency)
+ts t sides middle frequency =
+  (Tile (fromTuple sides) middle (TileImage t 0) Nothing, frequency)
   where
     fromTuple (u, r, d, l) = LRUD l r u d
 
@@ -71,10 +67,19 @@ unshuffledTiles = do
   replicate n tile
 
 startingTile :: Tile
-startingTile = Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0)
+startingTile =
+  Tile (LRUD Road Road City Field) MField (TileImage "CRFR" 0) Nothing
+
+straightRoadTile :: Tile
+straightRoadTile = fst $ ts "RFRF" (Road, Field, Road, Field) MField 8
 
 rotateCcw :: Tile -> Tile
-rotateCcw (Tile (LRUD l r u d) middle image) = Tile (LRUD u d r l) middle (rotateImageCcw image)
+rotateCcw (Tile (LRUD l r u d) middle image mplPlace) =
+  Tile
+    (LRUD u d r l)
+    middle
+    (rotateImageCcw image)
+    (mplPlace & _Just . _1 . _PlaceSide %~ rotateLRUDOneCcw)
 
 rotateImageCcw :: TileImage -> TileImage
 rotateImageCcw image = image & imageCcwRotates %~ (\x -> (x + 1) `mod` 4)
@@ -84,13 +89,13 @@ rotateCw = rotateCcw . rotateCcw . rotateCcw
 
 renderTileImage :: (MonadReader r m, HasAppContext r) => TileImage -> [Attribute] -> HtmlT m ()
 renderTileImage tileImage attrs = do
-  genImageUrl <- asks (^. makeTileImageUrl)
+  genImageUrl <- asks (^. appContext . makeTileImageUrl)
   img_ $ [class_ "tile-image", src_ (genImageUrl tileImage)] ++ attrs
 
-renderTile :: (MonadReader r m, HasAppContext r) => Tile -> [Text] -> HtmlT m ()
+renderTile :: (HasAppContext r) => Tile -> [Text] -> LiveView r a
 renderTile tile classes =
   div_ [classes_ $ "tile" : classes] $
-    renderTileImage (_image tile) []
+    renderTileContents tile
 
 computeTileBounds :: Board -> LRUD Int
 computeTileBounds = HM.foldlWithKey' f (LRUD 0 0 0 0) . _xyToTile
@@ -106,34 +111,74 @@ tileSize :: Text
 tileSize = "80px"
 
 (?||) :: ([Attribute] -> b) -> [[Attribute]] -> b
-f ?|| as = f (as >>= id)
+f ?|| as = f (join as)
 
 infixr 2 ?||
 
+isMCity :: MiddleTerrain -> Bool
+isMCity (MCity _) = True
+isMCity _ = False
+
+sidesWithIsTerminus :: Tile -> LRUD (SideTerrain, Bool)
+sidesWithIsTerminus tile =
+  let terrainCount :: SideTerrain -> Int
+      terrainCount terrain = length $ filter (== terrain) $ tile ^.. sides . traverse
+      terrainToIsTerminus :: SideTerrain -> Bool
+      terrainToIsTerminus = \case
+        City -> not $ isMCity $ tile ^. middle
+        Road -> terrainCount Road /= 2
+        _ -> False
+   in (\t -> (t, terrainToIsTerminus t)) <$> tile ^. sides
+
+facingSidesWithIsTerminus :: LRUD (Maybe Tile) -> LRUD (Maybe (SideTerrain, Bool))
+facingSidesWithIsTerminus tileNeighbors =
+  let facingLenses = lrudOnes <&> flipLRUDOne <&> toLRUDLens
+      mkPair mayNbr sideL = do
+        nbr <- mayNbr
+        pure $ sidesWithIsTerminus nbr ^. sideL
+   in mkPair <$> tileNeighbors <*> facingLenses
+
 facingSides :: LRUD (Maybe Tile) -> LRUD (Maybe SideTerrain)
-facingSides (LRUD nbrL nbrR nbrU nbrD) =
-  LRUD
-    (f nbrL lrudR)
-    (f nbrR lrudL)
-    (f nbrU lrudD)
-    (f nbrD lrudU)
-  where
-    f nbr sideL = nbr ^? _Just . sides . sideL
+facingSides tileNeighbors =
+  let facingLenses = lrudOnes <&> flipLRUDOne <&> toLRUDLens
+   in (\nbr sideL -> nbr ^? _Just . sides . sideL)
+        <$> tileNeighbors <*> facingLenses
 
 canPlace :: Tile -> LRUD (Maybe Tile) -> Bool
-canPlace t nbrh@(LRUD nbrL nbrR nbrU nbrD) =
+canPlace t nbrh =
   let nbrs = catMaybes (nbrh ^.. traverse)
-      hasNbr = length nbrs > 0
+      hasNbr = not (null nbrs)
       isCompat mySide theirSide
-        | theirSide == Nothing = True
+        | isNothing theirSide = True
         | theirSide == Just mySide = True
         | otherwise = False
-   in hasNbr && (all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse)))
+   in hasNbr && all (uncurry isCompat) (zip (t ^.. sides . traverse) (facingSides nbrh ^.. traverse))
 
-renderBoard' :: forall r. (HasAppContext r) => LiveView r
+tileNeighborhood :: (HasBoard b) => (Int, Int) -> b -> LRUD (Maybe Tile)
+tileNeighborhood loc b = f <$> (lrudNeighbors <*> pure loc)
+  where
+    f loc = b ^? xyToTile . ix loc
+
+canPlaceOnBoard :: (HasBoard b) => ((Int, Int), Tile) -> b -> Bool
+canPlaceOnBoard (loc, tile) b =
+  let nbrh = tileNeighborhood loc b
+  in canPlace tile nbrh
+
+lrudNeighbors :: LRUD ((Int, Int) -> (Int, Int))
+lrudNeighbors =
+  LRUD
+    (_1 -~ 1)
+    (_1 +~ 1)
+    (_2 +~ 1)
+    (_2 -~ 1)
+
+renderBoard' :: forall r. (HasAppContext r, HasGameState r) => LiveView r Message
 renderBoard' = do
-  board' <- view (appContext . gameState . board)
-  mayCurrTile <- asks (\s -> s ^? appContext . gameState . gameTiles . ix 0)
+  board' <- view (gameState . board)
+  mayCurrTile <- asks (\s -> s ^? gameState . gameTiles . ix 0)
+  isPhasePlaceTile <- view (gameWhoseTurn . whoseTurnPhase . to (\case
+    PhaseTile -> True
+    _ -> False))
   let (LRUD left right up down) = computeTileBounds board'
       xStart = left - 1
       xEnd = right + 1
@@ -152,7 +197,7 @@ renderBoard' = do
             (x, y - 1)
         where
           f loc = board' ^? xyToTile . ix loc
-      renderSpot :: (Int, Int) -> LiveView r
+      renderSpot :: HasGameState r => (Int, Int) -> LiveView r Message
       renderSpot loc@(x, y) =
         let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2]
          in div_
@@ -164,19 +209,22 @@ renderBoard' = do
                 class_ "spot"
               ]
               $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x, y) of
-                Nothing -> do
+                Nothing -> when isPhasePlaceTile $ do
+                  turn <- view gameWhoseTurn
                   mayPlaceCurrTile <- do
-                    case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
-                      Just (currTile, True) ->
-                        Just
-                          <$> addActionBinding
-                            "click"
-                            ( \_ r ->
-                                r & appContext . gameTiles %~ drop 1
-                                  & appContext . gameBoard . xyToTile . at (x, y) ?~ currTile
-                            )
+                  -- TODO: check that it's the current viewer's turn as well.
+                    case turn ^. whoseTurnPhase of
+                      PhaseTile ->
+                        case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
+                          Just (currTile, True) ->
+                            Just
+                              <$> addActionBinding
+                                "click"
+                                (\_ -> PlaceTile loc)
+                          _ -> pure Nothing
                       _ -> pure Nothing
-                  let canPlaceTileClass = maybe "cant-place" (const "can-place") $ mayPlaceCurrTile
+
+                  let canPlaceTileClass = maybe "cant-place" (const "can-place") mayPlaceCurrTile
                   div_
                     ?|| [ pure $ style_ [txt| grid-area: center; width: 100%; height: 100%;|],
                           maybeToList $ hsaction_ <$> mayPlaceCurrTile,
@@ -184,9 +232,10 @@ renderBoard' = do
                         ]
                     $ ""
                 -- (fromString $ show (neighborhood loc))
-                Just tile -> renderTileImage (_image tile) []
+                Just tile -> do
+                  renderTileContents tile
   div_
-    [ class_ "board",
+    [ classes_ ("board" : ["is-phase-place-tile" | isPhasePlaceTile]),
       style_
         [txt|
           grid-template-columns: repeat($numX, $tileSize);
@@ -194,3 +243,21 @@ renderBoard' = do
           |]
     ]
     $ mapM_ renderSpot spotsToRender
+
+renderTileContents :: (HasAppContext r) => Tile -> LiveView r a
+renderTileContents tile = do
+  renderTileImage (_image tile) []
+  case tile ^. tileMeeplePlacement of
+    Nothing -> ""
+    Just (mplace, playerIndex) -> do
+      let gridArea = case mplace of
+            PlaceMonastery -> "2 / 2"
+            PlaceAbbot -> "2 / 2"
+            PlaceSide L -> "2 / 1"
+            PlaceSide R -> "2 / 3"
+            PlaceSide U -> "1 / 2"
+            PlaceSide D -> "3 / 2"
+      div_ [class_ "meeple-container"] $ div_ [style_ [txt|
+                          grid-area: $gridArea;
+                          text-align: center;
+                          |]] $ fromString $ show playerIndex

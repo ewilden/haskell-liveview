@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bac54cd2a3fbfde0c3f9c851dbb490229347cb763fd06b4852a1586bb4d7cc9b
+-- hash: 1dad3f68a9cf47db8cbf9a62887eb03dc0fc1176437af773a7c7df11b074f41e
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       LiveView
       LiveView.Examples.Calculator
       LiveView.Examples.Carcassonne
+      LiveView.Examples.Carcassonne.Reducer
       LiveView.Examples.Carcassonne.Tiles
       LiveView.Examples.Carcassonne.Types
       LiveView.Fixtures
@@ -82,19 +83,25 @@ library
       LambdaCase
       NamedFieldPuns
       TupleSections
+  ghc-options: -fwarn-incomplete-patterns -Werror
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
+    , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
@@ -102,19 +109,29 @@ library
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
     , text >=1.2.3.1 && <2
+    , transformers-base
+    , tuple
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010
@@ -165,20 +182,25 @@ executable liveview-simple-exe
       LambdaCase
       NamedFieldPuns
       TupleSections
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
+    , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
@@ -187,19 +209,29 @@ executable liveview-simple-exe
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
     , text >=1.2.3.1 && <2
+    , transformers-base
+    , tuple
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010
@@ -251,20 +283,25 @@ test-suite liveview-simple-test
       LambdaCase
       NamedFieldPuns
       TupleSections
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
     , aeson >=1.5.5.1 && <2
     , aeson-qq >=0.8.3 && <1
+    , algebraic-graphs
     , async
     , base >=4.7 && <5
     , bytestring
     , composition >=1.0.2.1 && <2
+    , cookie
     , extra >=1.6.17 && <2
     , focus
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
+    , http-api-data
+    , http-types
+    , jose
     , lens
     , lens-aeson
     , list-t
@@ -273,19 +310,29 @@ test-suite liveview-simple-test
     , monoidal-containers
     , mtl >=2.2.2 && <3
     , neat-interpolation
+    , profunctors
     , random
     , reducers
+    , semigroupoids
     , servant
+    , servant-auth
+    , servant-auth-server
     , servant-lucid
     , servant-server
     , servant-websockets
+    , simple
     , stm
     , stm-containers
     , streaming
     , text >=1.2.3.1 && <2
+    , transformers-base
+    , tuple
     , unliftio
     , unordered-containers >=0.2.13.0 && <1
     , vector >=0.12.1.2 && <1
+    , void
+    , wai
+    , wai-websockets
     , warp
     , websockets
   default-language: Haskell2010
