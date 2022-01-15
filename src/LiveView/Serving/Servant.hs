@@ -18,6 +18,7 @@ import Control.Monad
 import Data.Aeson
 import Data.ByteString.Builder
 import Data.ByteString
+import Data.ByteString.Lazy qualified as BL
 import Data.Text qualified as T
 import Data.Text.Encoding
 import Debug.Trace
@@ -107,7 +108,7 @@ serveServantLiveView debugPrint basePage rootId store lv token =
         (rootWrapper lv)
         mempty
         token
-    live conn = withPingThread conn 30 (debugPrint "ping") $ snd $
+    live conn = withPingThread conn 30 (debugPrint "ping") $ sendAll $ snd $
       serveLiveView
         (ServDeps sendMsg debugPrint)
         store
@@ -118,6 +119,8 @@ serveServantLiveView debugPrint basePage rootId store lv token =
           sendMsg = WS.sendTextData conn
           incomingMsgs =
             S.repeatM (WS.receiveData conn)
+          sendAll :: Stream (Of BL.ByteString) IO () -> IO ()
+          sendAll = S.mapM_ sendMsg
 
 serveWsAsWaiApp :: (Connection -> IO ()) -> Application
 serveWsAsWaiApp f =

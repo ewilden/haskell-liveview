@@ -219,33 +219,33 @@ instance (Monad m) => Profunctor (WrappedRenderer m a) where
 type LiveViewT state mutator m a = L.HtmlT (Renderer state mutator m) a
 type LiveView state mutator = LiveViewT state mutator STM ()
 
-newtype WrappedLiveView state mutator = WrappedLiveView
-  { unwrapLiveView :: LiveView state mutator
+newtype WrappedLiveView m state mutator = WrappedLiveView
+  { unwrapLiveView :: LiveViewT state mutator m ()
   }
 
-instance Profunctor WrappedLiveView where
-  dimap :: forall a b c d. (a -> b) -> (c -> d) -> WrappedLiveView b c -> WrappedLiveView a d
+instance (Monad m) => Profunctor (WrappedLiveView m) where
+  dimap :: forall a b c d. (a -> b) -> (c -> d) -> WrappedLiveView m b c -> WrappedLiveView m a d
   dimap f g (WrappedLiveView x) = 
     WrappedLiveView $ hoist morphRend x
     where 
-      morphRend :: Renderer b c STM e -> Renderer a d STM e
+      morphRend :: Renderer b c m e -> Renderer a d m e
       morphRend rend = 
             let wrappedRend = WrappedRenderer rend
             in unwrapRenderer $ dimap f g wrappedRend
-    -- where dimap' = unwrapRenderer . dimap f g . WrappedRenderer
+
 
 dimapLiveView
-  :: (state -> b)
-     -> (c -> mutator) -> LiveView b c -> LiveView state mutator
+  :: Monad m => (state -> b)
+     -> (c -> mutator) -> LiveViewT b c m () -> LiveViewT state mutator m ()
 dimapLiveView f g = unwrapLiveView . dimap f g . WrappedLiveView
 
-zoomLiveView :: Lens' b a -> LiveView a (a -> a) -> LiveView b (b -> b)
+zoomLiveView :: Monad m => Lens' b a -> LiveViewT a (a -> a) m () -> LiveViewT b (b -> b) m ()
 zoomLiveView l = dimapLiveView (^. l) (l %~)
 
-fromSettingMutator :: LiveView a b -> LiveView a (c -> b)
+fromSettingMutator :: Monad m => LiveViewT a b m () -> LiveViewT a (c -> b) m ()
 fromSettingMutator = dimapLiveView id const
 
-toSettingMutator :: LiveView a (a -> b) -> LiveView a b
+toSettingMutator :: Monad m => LiveViewT a (a -> b) m () -> LiveViewT a b m ()
 toSettingMutator lv = do
   a <- ask
   dimapLiveView id ($ a) lv
@@ -265,19 +265,20 @@ data ServDeps = ServDeps
     _sdDebugPrint :: String -> IO ()
   }
 
-runLiveView :: forall state mutator.
-  LiveView state mutator ->
+runLiveView :: forall m state mutator a.
+  (Functor m) =>
+  LiveViewT state mutator m a ->
   state ->
   BindingState ->
-  STM ((Html (), BindingState), BindingMap mutator)
+  m ((Html a, BindingState), BindingMap mutator)
 runLiveView lv s bs =
-  let rendOfHtml :: Renderer state mutator STM (Html ())
+  let rendOfHtml :: Renderer state mutator m (Html a)
       rendOfHtml = L.commuteHtmlT lv
-      ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) STM)) (Html ())
+      ranRend :: ReaderT state (StateT BindingState (WriterT (BindingMap mutator) m)) (Html a)
       ranRend = runRenderer rendOfHtml
-      stateT' :: StateT BindingState (WriterT (BindingMap mutator) STM) (Html ())
+      stateT' :: StateT BindingState (WriterT (BindingMap mutator) m) (Html a)
       stateT' = runReaderT ranRend s
-      writerT' :: WriterT (BindingMap mutator) STM (Html (), BindingState)
+      writerT' :: WriterT (BindingMap mutator) m (Html a, BindingState)
       writerT' = runStateT stateT' bs
   in runWriterT writerT'
 
@@ -288,7 +289,7 @@ serveLiveView :: forall token mutator state.
   LiveView state mutator ->
   Stream (Of BL.ByteString) IO () ->
   token ->
-  (IO (Html ()), IO ())
+  (IO (Html ()), Stream (Of BL.ByteString) IO ())
 serveLiveView deps store lv incomingMessages token =
   (init, live)
   where
@@ -296,30 +297,31 @@ serveLiveView deps store lv incomingMessages token =
       (initialState, _) <- _subscribeState store token
       ((initHtml, _), _) <- atomically $ runLiveView lv initialState nullBindingState
       pure initHtml
+    live :: Stream (Of BL.ByteString) IO ()
     live = do
-      (initialState, states, initHtml, initBs, bindMap) <- do
+      (initialState, states, initHtml, initBs, bindMap) <- liftIO $ do
         (initialState, states) <- _subscribeState store token
         ((initHtml, initBs), bindMap) <- atomically $ runLiveView lv initialState nullBindingState
         pure (initialState, states, initHtml, initBs, bindMap)
         
       let initClock = Clock 0
       (ioref :: IORef (Html (), BindingMap mutator, Clock, state))
-        <- newIORef (initHtml, bindMap, initClock, initialState)
-      _sdSendSocketMessage deps $
+        <- liftIO $ newIORef (initHtml, bindMap, initClock, initialState)
+      liftIO $ _sdSendSocketMessage deps $
         encode (("mount" :: T.Text, toSplitText initHtml), initClock)
       let inpStream = mergePar (S.map Left states) (S.map Right incomingMessages)
-      flip S.mapM_ inpStream $ \case
+      flip S.mapM_ (hoist liftIO inpStream) $ \case
         Left s -> do
-          (h, _, c, _) <- readIORef ioref
+          (h, _, c, _) <- liftIO $ readIORef ioref
           let c' = succ c
-          ((h', _), bm') <- atomically $ runLiveView lv s nullBindingState
-          _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
-          writeIORef ioref (h', bm', c', s)
+          ((h', _), bm') <- liftIO $ atomically $ runLiveView lv s nullBindingState
+          liftIO $ _sdSendSocketMessage deps $ encode (("patch" :: T.Text, diffHtml h h'), c')
+          liftIO $ writeIORef ioref (h', bm', c', s)
         Right msg -> do
           case (decode msg :: Maybe (ActionCall, Clock)) of
             Nothing -> pure ()
             Just (call, callClock) -> do
-              (_, bm, clock, s) <- readIORef ioref
+              (_, bm, clock, s) <- liftIO $ readIORef ioref
               if callClock == clock
                 then do
                   let mayBSeed = readMaybe @Int (T.unpack $ _action call)
@@ -331,5 +333,5 @@ serveLiveView deps store lv incomingMessages token =
                             . ix seed
                   case mayHandler of
                     Nothing -> pure ()
-                    Just handlers -> forM_ handlers (_mutateState store token . ($ BindingCall (_payload call ^? ix "value")))
-                else _sdDebugPrint deps $ "No matching handler for " <> show msg
+                    Just handlers -> forM_ handlers (liftIO . _mutateState store token . ($ BindingCall (_payload call ^? ix "value")))
+                else liftIO $ _sdDebugPrint deps $ "No matching handler for " <> show msg
