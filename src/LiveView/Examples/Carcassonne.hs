@@ -161,10 +161,10 @@ joinSession servCtxt authResult (SessionId sessId) = case authResult of
     liftIO $ print "Failed to auth joinSession"
     throwError err401
 
-checkCreds :: CookieSettings -> JWTSettings -> ServerContext -> User
+takeUsername :: CookieSettings -> JWTSettings -> ServerContext -> User
            -> Handler (Headers '[ Header "Location" T.Text,
                 Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie] NoContent)
-checkCreds cookieSettings jwtSettings srvCtxt user = do
+takeUsername cookieSettings jwtSettings srvCtxt user = do
     maySessid <- liftIO $ runRandSTMIntoIO $ do
       userEntry <- lift $ StmMap.lookup user (srvCtxt ^. scUserSet)
       case userEntry of
@@ -220,7 +220,7 @@ server' cookieSettings jwtSettings servCtxt =
           liveView) . SessionId)
       _ -> const (throwError err401 :<|> Tagged (\req resp -> resp forbidden))
   ) :<|> joinSession servCtxt
-    :<|> checkCreds cookieSettings jwtSettings servCtxt
+    :<|> takeUsername cookieSettings jwtSettings servCtxt
     :<|> pure (doctypehtml_ $
                 form_ [action_ "/login", method_ "POST"] $ do
                   div_ $ do
@@ -235,8 +235,13 @@ server' cookieSettings jwtSettings servCtxt =
                   div_ $ do
                     input_ [name_ "sessionId", placeholder_ "Session ID"]
                   div_ $ button_ "Join"
-                ul_ $ do
-                  forM_ stateList $ \entry -> li_ $ fromString $ show (entry ^. _2 . userId2Player)
+                form_ [action_ "/join", method_ "POST"] $ ul_ $ do
+                  forM_ stateList $ \entry -> do
+                    let sessid = sessionId $ entry ^. _1
+                    input_ [type_ "radio", name_ "sessionId", value_ sessid, id_ sessid]
+                    label_ [for_ sessid] $ toHtml sessid
+                    -- fromString $ show (fst entry, entry ^. _2 . userId2Player)
+                  div_ $ button_ "Join"
                 )
     :<|> serveDirectoryWebApp "static"
 
