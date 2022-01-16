@@ -36,6 +36,7 @@ import Data.Text.Lazy qualified as TL
 import Debug.Trace
 import Focus qualified
 import Import
+import ListT qualified
 import LiveView.Html
 import LiveView.Serving
 import Lucid (Html)
@@ -96,13 +97,17 @@ data StateStore m token mutator state = StateStore
   { _subscribeState :: token -> m (state, Stream (Of state) m ()),
     _mutateState :: token -> mutator -> m (),
     _deleteState :: token -> m (),
-    _existsState :: token -> m Bool
+    _existsState :: token -> m Bool,
+    _allStates :: m (Stream (Of [(token, state)]) m ())
   }
+
+mapAllStatesStream :: (Monad m) => (a -> b) -> m (Stream (Of [(token, a)]) m ()) -> m (Stream (Of [(token, b)]) m ())
+mapAllStatesStream f list = S.map (fmap (\(t,s) -> (t, f s))) <$> list
 
 makeClassy ''StateStore
 
 instance (Monad m) => Profunctor (StateStore m token) where
-  rmap f (StateStore sub mut del exists) =
+  rmap f (StateStore sub mut del exists list) =
     StateStore
       ( \tok -> do
           (x, xs) <- sub tok
@@ -113,21 +118,24 @@ instance (Monad m) => Profunctor (StateStore m token) where
       mut
       del
       exists
-  lmap f (StateStore sub mut del exists) =
+      (mapAllStatesStream f list)
+  lmap f (StateStore sub mut del exists list) =
     StateStore
       sub
       (\tok mutr -> mut tok (f mutr))
       del
       exists
+      list
 
 hoistM :: (Monad m, Monad n) => (forall a. m a -> n a) -> StateStore m token mutator state -> StateStore n token mutator state
-hoistM f (StateStore sub mut del ext) = StateStore
+hoistM f (StateStore sub mut del ext list) = StateStore
   (\tok -> do
       (h,tl) <- f $ sub tok
       pure (h, hoist f tl))
   (f .: mut)
   (f . del)
   (f . ext)
+  undefined
 
 inMemoryStateStore ::
   forall state k m.
@@ -147,7 +155,7 @@ inMemoryStateStore liftSTM mkState = do
           Nothing -> do
             v <- mkStateWithChan
             liftSTM $ StmMap.insert v k stmMap >> pure v
-          Just v -> pure v 
+          Just v -> pure v
       subscribe :: k -> m (state, Stream (Of state) m ())
       subscribe token = do
         (s, wChan) <- getOrInit token
@@ -162,7 +170,7 @@ inMemoryStateStore liftSTM mkState = do
       mutate token f = do
         (s, wChan) <- getOrInit token
         let (s', w) = runWriter $ runWithAction $ intoWithAction (f s)
-        liftSTM $ do 
+        liftSTM $ do
           STM.writeTChan wChan $ Right s'
           StmMap.insert (s', wChan) token stmMap
         getAction w
@@ -175,7 +183,10 @@ inMemoryStateStore liftSTM mkState = do
             StmMap.delete token stmMap
       exists token = do
         liftSTM $ StmMap.lookup token stmMap <&> isJust
-  pure $ StateStore subscribe mutate delete exists
+      list = do
+        assocs <- liftSTM $ ListT.toList $ StmMap.listT stmMap
+        pure $ S.yield (fmap (second fst) assocs)
+  pure $ StateStore subscribe mutate delete exists list
 
 newtype BindingKey = BindingKey {_unBindingKey :: Int}
 
@@ -225,17 +236,16 @@ newtype WrappedLiveView m state mutator = WrappedLiveView
 
 instance (Monad m) => Profunctor (WrappedLiveView m) where
   dimap :: forall a b c d. (a -> b) -> (c -> d) -> WrappedLiveView m b c -> WrappedLiveView m a d
-  dimap f g (WrappedLiveView x) = 
+  dimap f g (WrappedLiveView x) =
     WrappedLiveView $ hoist morphRend x
-    where 
+    where
       morphRend :: Renderer b c m e -> Renderer a d m e
-      morphRend rend = 
+      morphRend rend =
             let wrappedRend = WrappedRenderer rend
             in unwrapRenderer $ dimap f g wrappedRend
 
 
-dimapLiveView
-  :: Monad m => (state -> b)
+dimapLiveView :: Monad m => (state -> b)
      -> (c -> mutator) -> LiveViewT b c m () -> LiveViewT state mutator m ()
 dimapLiveView f g = unwrapLiveView . dimap f g . WrappedLiveView
 
@@ -303,7 +313,7 @@ serveLiveView deps store lv incomingMessages token =
         (initialState, states) <- _subscribeState store token
         ((initHtml, initBs), bindMap) <- atomically $ runLiveView lv initialState nullBindingState
         pure (initialState, states, initHtml, initBs, bindMap)
-        
+
       let initClock = Clock 0
       (ioref :: IORef (Html (), BindingMap mutator, Clock, state))
         <- liftIO $ newIORef (initHtml, bindMap, initClock, initialState)

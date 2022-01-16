@@ -65,7 +65,8 @@ initGameState shuffle numPlayers = do
         _gameNumPlayers = numPlayers,
         _gameWhoseTurn = WhoseTurn 0 PhaseTile,
         _gameScores = case numPlayers of NumPlayers n ->
-                                           HM.fromList $ take (fromIntegral n) $ zip (PlayerIndex <$> [0..]) (repeat 0)
+                                           HM.fromList $ take (fromIntegral n) $ zip (PlayerIndex <$> [0..]) (repeat 0),
+        _gameMostRecentError = ""
       }
 
 initGameRoomContext :: (MonadRandom m) => m GameRoomContext
@@ -372,4 +373,6 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
       in step gs''
 
 reducer :: Message -> GameState -> GameState
-reducer = either error id .: guardedReducer
+reducer msg gs = case guardedReducer msg gs of
+  Right gs' -> gs'
+  Left err -> gs { _gameMostRecentError = fromString err }

@@ -74,7 +74,6 @@ liveView = do
     "Not your turn!"
   when (me == player) $ dimapLiveView id (\m -> gameState %~ reducer m) $
     div_ [class_ "current-turn"] $
-
       case phase of
         PhaseTile -> do
           case tileList of
@@ -93,7 +92,6 @@ liveView = do
               button_ [hsaction_ rotRight] "rotate right"
         PhasePlaceMeeple loc -> do
           "Place meeple?"
-          -- TODO: surface which meeple placements are valid
           let mkPlaceMeeple mayPlace = addActionBinding "click"
                   (\_ -> PlaceMeeple loc mayPlace)
           ul_ $ do
@@ -229,11 +227,17 @@ server' cookieSettings jwtSettings servCtxt =
                     input_ [name_ "name", placeholder_ "Pick a name"]
                   div_ $ button_ "Login"
                       )
-    :<|> pure (doctypehtml_ $
+    :<|> do 
+            listStream <- liftIO $ runRandSTMIntoIO $ servCtxt ^. stateStore . allStates
+            stateList <- fromJust <$> liftIO (runRandSTMIntoIO $ S.head_ listStream)
+            pure (doctypehtml_ $ do
                 form_ [action_ "/join", method_ "POST"] $ do
                   div_ $ do
                     input_ [name_ "sessionId", placeholder_ "Session ID"]
-                  div_ $ button_ "Join")
+                  div_ $ button_ "Join"
+                ul_ $ do
+                  forM_ stateList $ \entry -> li_ $ fromString $ show (entry ^. _2 . userId2Player)
+                )
     :<|> serveDirectoryWebApp "static"
 
 main :: IO ()

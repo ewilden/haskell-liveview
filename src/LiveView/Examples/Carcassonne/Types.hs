@@ -177,7 +177,8 @@ data GameState = GameState
     _gameTiles :: [Tile],
     _gameNumPlayers :: NumPlayers,
     _gameWhoseTurn :: WhoseTurn,
-    _gameScores :: HashMap PlayerIndex Score
+    _gameScores :: HashMap PlayerIndex Score,
+    _gameMostRecentError :: Text
   } deriving Show
 
 makeClassy ''GameState
