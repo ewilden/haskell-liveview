@@ -50,7 +50,7 @@ liveView :: LiveView AppContext (AppContext -> AppContext)
 liveView = do
   link_ [rel_ "stylesheet", href_ "/carcassonne.css"]
   tileList <- view (gameState . gameTiles)
-  mkUrl <- view makeTileImageUrl
+  let mkUrl = makeTileImageUrl 
   let currTileProp = case tileList of
         [] -> ""
         (currTile : _) ->
@@ -192,7 +192,7 @@ takeUsername cookieSettings jwtSettings srvCtxt user = do
 
 
 -- Bug: placing multiple meeples can't be done on 1 city 3 roads (TODO)
--- TODO: meeple ui
+-- TODO: meeple ui. Done (at a basic level)
 
 -- TODO: being able to resume the same game state after reloading ghci
 

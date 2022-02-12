@@ -13,21 +13,28 @@ import Data.Hashable
 import Data.List.NonEmpty
 import Data.Semigroup.Foldable
 import Data.Text
-import GHC.Generics (Generic)
+import GHC.Generics (Generic, Generic1)
 import LiveView
 import Numeric.Natural (Natural)
 import StmContainers.Map qualified as StmMap
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, ToJSONKey, ToJSON1, FromJSON1, FromJSONKey)
 import Web.FormUrlEncoded
 import Servant.Auth.Server
 
-data SideTerrain = City | Field | Road deriving (Show, Eq, Ord, Enum, Bounded)
+data SideTerrain = City | Field | Road deriving (Show, Eq, Ord, Enum, Bounded, Generic)
 
-data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord)
+instance ToJSON SideTerrain
+instance FromJSON SideTerrain
+
+data MiddleTerrain = MCity {_hasCrest :: Bool} | MMonastery | MField deriving (Show, Eq, Ord, Generic)
+instance ToJSON MiddleTerrain
+instance FromJSON MiddleTerrain
 
 data LRUDOne = L | R | U | D deriving (Show, Eq, Ord, Generic, Enum, Bounded)
 
 instance Hashable LRUDOne
+instance ToJSON LRUDOne
+instance FromJSON LRUDOne
 
 flipLRUDOne :: LRUDOne -> LRUDOne
 flipLRUDOne = \case
@@ -43,7 +50,10 @@ data LRUD a = LRUD
     _lrudU :: a,
     _lrudD :: a
   }
-  deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+  deriving (Functor, Foldable, Traversable, Show, Eq, Ord, Generic)
+
+instance (ToJSON a) => ToJSON (LRUD a)
+instance (FromJSON a) => FromJSON (LRUD a)
 
 makeLenses ''LRUD
 
@@ -81,24 +91,36 @@ rotateLRUDOneCcw = \case
   R -> U
   U -> L
 
-newtype NumPlayers = NumPlayers Natural deriving (Num, Enum, Eq, Show)
+newtype NumPlayers = NumPlayers Natural deriving (Num, Enum, Eq, Show, Generic)
+
+instance ToJSON NumPlayers
+instance FromJSON NumPlayers
 
 newtype PlayerIndex = PlayerIndex {
   _unPlayerIndex :: Natural
   } deriving (Num, Eq, Show, Ord, Generic, Integral, Enum, Real)
 makeLenses ''PlayerIndex
 
-newtype Score = Score Natural deriving (Num, Eq, Show)
+newtype Score = Score Natural deriving (Num, Eq, Show, Generic)
+instance ToJSON Score
+instance FromJSON Score
 
 instance Hashable PlayerIndex
+instance ToJSON PlayerIndex
+instance ToJSONKey PlayerIndex
+instance FromJSON PlayerIndex
+instance FromJSONKey PlayerIndex
 
 data MeeplePlacement
   = PlaceSide LRUDOne
   | PlaceMonastery
   | PlaceAbbot
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 makeClassyPrisms ''MeeplePlacement
+
+instance ToJSON MeeplePlacement
+instance FromJSON MeeplePlacement
 
 data MeepleCounts = MeepleCounts
   { _meeples :: Int,
@@ -117,9 +139,11 @@ data TileImage = TileImage
   { _imageName :: Text,
     _imageCcwRotates :: Int
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 makeClassy ''TileImage
+instance ToJSON TileImage
+instance FromJSON TileImage
 
 data Tile = Tile
   { _sides :: LRUD SideTerrain,
@@ -127,13 +151,19 @@ data Tile = Tile
     _image :: TileImage,
     _tileMeeplePlacement :: Maybe (MeeplePlacement, PlayerIndex)
   }
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Generic)
 
 makeClassy ''Tile
 
+instance ToJSON Tile
+instance FromJSON Tile
+
 newtype Board = Board
   { _xyToTile :: HashMap (Int, Int) Tile
-  } deriving Show
+  } deriving (Show, Generic)
+
+instance ToJSON Board
+instance FromJSON Board
 
 makeClassy ''Board
 
@@ -152,7 +182,9 @@ data TurnPhase
   | PhasePlaceMeeple (Int, Int) 
   | PhaseTakeAbbot
   | PhaseGameOver
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
+instance ToJSON TurnPhase
+instance FromJSON TurnPhase
 
 data TPhaseTile
 data TPhasePlaceMeeple
@@ -172,9 +204,12 @@ predWrapped a
 data WhoseTurn = WhoseTurn
   { _whoseTurnPlayer :: PlayerIndex,
     _whoseTurnPhase :: TurnPhase
-  } deriving Show
+  } deriving (Show, Generic)
 
 makeClassy ''WhoseTurn
+
+instance ToJSON WhoseTurn
+instance FromJSON WhoseTurn
 
 data GameState = GameState
   { _gameBoard :: Board,
@@ -183,9 +218,12 @@ data GameState = GameState
     _gameWhoseTurn :: WhoseTurn,
     _gameScores :: HashMap PlayerIndex Score,
     _gameMostRecentError :: Text
-  } deriving Show
+  } deriving (Show, Generic)
 
 makeClassy ''GameState
+
+instance ToJSON GameState
+instance FromJSON GameState
 
 instance HasBoard GameState where
   board = gameBoard
@@ -197,14 +235,20 @@ instance FromJSON SessionId
 instance FromJWT SessionId
 instance FromForm SessionId
 
-newtype UserId = UserId Text deriving (Show, Eq, Ord, Hashable)
+newtype UserId = UserId Text deriving (Show, Eq, Ord, Hashable, Generic)
+instance ToJSON UserId
+instance FromJSON UserId
+instance ToJSONKey UserId
+instance FromJSONKey UserId
 
 data GameRoomContext = GameRoomContext
-  { _makeTileImageUrl :: TileImage -> Text,
-    _userId2Player :: HashMap UserId PlayerIndex,
+  { _userId2Player :: HashMap UserId PlayerIndex,
     _grGameState :: GameState
-  }
+  } deriving Generic
 makeClassy ''GameRoomContext
+
+instance ToJSON GameRoomContext
+instance FromJSON GameRoomContext
 
 instance HasGameState GameRoomContext where
   gameState = grGameState
@@ -212,9 +256,12 @@ instance HasGameState GameRoomContext where
 data AppContext = AppContext
   { _acGameRoomContext :: GameRoomContext,
     _userId :: UserId
-  }
+  } deriving Generic
 
 makeClassy ''AppContext
+
+instance ToJSON AppContext
+instance FromJSON AppContext
 
 myPlayerIndex :: (HasAppContext ac) => ac -> PlayerIndex
 myPlayerIndex ac = ac ^?! appContext . gameRoomContext . userId2Player . ix (ac ^. userId)

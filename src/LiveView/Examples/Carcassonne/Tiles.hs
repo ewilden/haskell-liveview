@@ -88,10 +88,16 @@ rotateImageCcw image = image & imageCcwRotates %~ (\x -> (x + 1) `mod` 4)
 rotateCw :: Tile -> Tile
 rotateCw = rotateCcw . rotateCcw . rotateCcw
 
+makeTileImageUrl :: TileImage -> Text
+makeTileImageUrl (TileImage name ccwRotates) =
+        let suffix = case ccwRotates `mod` 4 of
+              0 -> ""
+              n -> "-" <> tshow n
+          in [txt|/tiles/${name}50${suffix}.jpg|]
+
 renderTileImage :: (MonadReader r m, HasAppContext r) => TileImage -> [Attribute] -> HtmlT m ()
 renderTileImage tileImage attrs = do
-  genImageUrl <- asks (^. appContext . makeTileImageUrl)
-  img_ $ [class_ "tile-image", src_ (genImageUrl tileImage)] ++ attrs
+  img_ $ [class_ "tile-image", src_ (makeTileImageUrl tileImage)] ++ attrs
 
 renderTile :: (HasAppContext r) => Tile -> [Text] -> LiveView r a
 renderTile tile classes =

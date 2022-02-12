@@ -73,12 +73,7 @@ initGameRoomContext :: (MonadRandom m) => m GameRoomContext
 initGameRoomContext = do
   gameState <- initGameState shuffle (NumPlayers 2)
   pure $ GameRoomContext
-    { _makeTileImageUrl = \(TileImage name ccwRotates) ->
-        let suffix = case ccwRotates `mod` 4 of
-              0 -> ""
-              n -> "-" <> tshow n
-          in [txt|/tiles/${name}50${suffix}.jpg|],
-      _grGameState = gameState,
+    { _grGameState = gameState,
       _userId2Player = mempty
     }
 
