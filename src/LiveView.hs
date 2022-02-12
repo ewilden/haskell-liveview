@@ -135,7 +135,7 @@ hoistM f (StateStore sub mut del ext list) = StateStore
   (f .: mut)
   (f . del)
   (f . ext)
-  undefined
+  (hoist f <$> f list)
 
 inMemoryStateStore ::
   forall state k m.
