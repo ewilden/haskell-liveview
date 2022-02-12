@@ -367,7 +367,7 @@ guardedReducer message gs = case (gs ^. gameWhoseTurn . whoseTurnPhase, message)
                   & gameWhoseTurn . whoseTurnPlayer . unPlayerIndex %~ (`mod` numPlayers) . (+1)
           step s = case s ^. gameTiles of
             [] -> s & gameWhoseTurn . whoseTurnPhase .~ PhaseGameOver
-            (x:xs) -> if null (possiblePlacements (gs ^. gameBoard) x)
+            (x:_) -> if null (possiblePlacements (gs ^. gameBoard) x)
                         then step (s & gameTiles %~ drop 1)
                         else s
       in step gs''

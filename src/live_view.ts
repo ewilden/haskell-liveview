@@ -76,6 +76,9 @@ function parseWSMessage(wsMessage: WSMessage): LiveViewMessage|null {
   try {
     parsed = JSON.parse(wsMessage.event.data);
   } catch (e) {
+    if (DEBUG) {
+      console.error(`failed to parse ${wsMessage}.event.data as JSON`);
+    }
     // pass
   }
   if (DEBUG) {

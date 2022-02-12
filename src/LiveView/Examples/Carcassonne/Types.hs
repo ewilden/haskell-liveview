@@ -154,6 +154,10 @@ data TurnPhase
   | PhaseGameOver
   deriving (Eq, Ord, Show)
 
+data TPhaseTile
+data TPhasePlaceMeeple
+data TPhaseTakeAbbot
+data TPhaseGameOver
 
 succWrapped :: (Eq a, Enum a, Bounded a) => a -> a
 succWrapped a
@@ -266,3 +270,10 @@ data Message
   | PlaceTile (Int, Int)
   | PlaceMeeple (Int, Int) (Maybe MeeplePlacement)
   | TakeAbbot (Maybe (Int, Int))
+
+data MessageGADT phase where
+  MGADTCurrentTileRotateRight :: MessageGADT TPhaseTile
+  MGADTCurrentTileRotateLeft :: MessageGADT TPhaseTile
+  MGADTPlaceTile :: (Int, Int) -> MessageGADT TPhaseTile
+  MGADTPlaceMeeple :: (Int, Int) -> Maybe MeeplePlacement -> MessageGADT TPhasePlaceMeeple
+  MGADTTakeAbbot :: Maybe (Int, Int) -> MessageGADT TPhaseTakeAbbot

@@ -188,6 +188,13 @@ takeUsername cookieSettings jwtSettings srvCtxt user = do
             Nothing           -> throwError err401
             Just applyCookies -> return $ addHeader ("/session/" <> sessid) (applyCookies NoContent)
 -- TODO: allow user to join game created by someone else
+-- => we actually have this now but it's not great looking
+
+
+-- Bug: placing multiple meeples can't be done on 1 city 3 roads (TODO)
+-- TODO: meeple ui
+
+-- TODO: being able to resume the same game state after reloading ghci
 
 api :: Proxy (API '[Cookie])
 api = Proxy
