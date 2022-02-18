@@ -266,4 +266,27 @@ main = do
         -- }
       }
       cfg = cooks :. jwtCfg :. EmptyContext
-  Warp.run 5000 (serveWithContext api cfg (server' defaultCookieSettings jwtCfg servCtxt))
+  Warp.run 5000 (serveWithContext api cfg (server' cooks jwtCfg servCtxt))
+
+mkPersistedState :: IO
+  (Servant.Context '[CookieSettings, JWTSettings], CookieSettings,
+   JWTSettings, ServerContext)
+mkPersistedState = do
+  servCtxt <- initServerContext
+  jwk <- generateKey 
+  let jwtCfg = defaultJWTSettings jwk
+      cooks = defaultCookieSettings {
+        cookieIsSecure = NotSecure,
+        cookieSameSite = SameSiteStrict,
+        cookieXsrfSetting = Nothing
+        -- cookieXsrfSetting = Just defaultXsrfCookieSettings {
+        --   xsrfExcludeGet = True
+        -- }
+      }
+      cfg = cooks :. jwtCfg :. EmptyContext
+  pure (cfg, cooks, jwtCfg, servCtxt)
+
+runServer :: (Servant.Context '[CookieSettings, JWTSettings], CookieSettings,
+   JWTSettings, ServerContext) -> IO ()
+runServer (cfg, cooks, jwtCfg, servCtxt) = do
+  Warp.run 5000 (serveWithContext api cfg (server' cooks jwtCfg servCtxt))

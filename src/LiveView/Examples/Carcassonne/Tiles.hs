@@ -57,6 +57,15 @@ tileSpecs =
     ts "FFRR" (Field, Field, Road, Road) MField 9
   ]
 
+oneCityThreeRoadsTile :: Tile
+oneCityThreeRoadsTile = fst $ ts "CRRR" (City, Road, Road, Road) MField 3
+
+oneCityThreeFieldsTile :: Tile
+oneCityThreeFieldsTile = fst $ ts "CFFF" (City, Field, Field, Field) MField 5
+
+twoRoadsTile :: Tile
+twoRoadsTile = fst $ ts "RFRF" (Road, Field, Road, Field) MField 8
+
 shuffle :: (MonadRandom m) => [a] -> m [a]
 shuffle ls = do
   (fs :: [Float]) <- mapM (const $ getRandomR (0, 1)) ls

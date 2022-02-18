@@ -25,6 +25,7 @@ import Data.Functor ((<&>))
 import Control.Lens
 import Data.List (sortOn, findIndex, elemIndex, foldl', sort)
 import Data.Either (isRight)
+import Test.Hspec
 
 prop_diffThenPatchIsIdentity :: Property
 prop_diffThenPatchIsIdentity = property $ do
@@ -268,11 +269,28 @@ prop_canPlaceMeepleOnGloballyUnmeepledTerrain = property $ do
                         _ -> Nothing) placements
         ) === sort relevantGloballyUnmeepledTerrains
 
+compCountsSpec :: Spec
+compCountsSpec = do
+  describe "one city, three fields" $ do
+    let comps = terrainComponentsIgnoringEmptyKey Road (Board $ HM.singleton (0,0) oneCityThreeFieldsTile)
+    it (show comps <> "has four road components") $ do
+      length comps `shouldBe` 4
+  describe "one city, three roads" $ do
+    let comps = terrainComponentsIgnoringEmptyKey Road (Board $ HM.singleton (0,0) oneCityThreeRoadsTile)
+    it (show comps <> "has four road components") $ do
+      length comps `shouldBe` 4
+  describe "two roads" $ do
+    let comps = terrainComponentsIgnoringEmptyKey Road (Board $ HM.singleton (0,0) twoRoadsTile)
+    it (show comps <> "has three road components") $ do
+      length comps `shouldBe` 3
+
 tests :: IO Bool
 tests = checkParallel $$(discover)
 
 main :: IO Bool
 main = do
+  hspec $ do 
+    compCountsSpec
   recheck (Size 91) (Seed 1195665561685055342 12918760422426807891) prop_alwaysPlaceable
   recheck (Size 48) (Seed 4493440989694573018 16655293125463297363) prop_canPlaceMeepleOnGloballyUnmeepledTerrain
   tests
