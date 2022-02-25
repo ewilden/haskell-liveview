@@ -213,7 +213,7 @@ renderBoard' = do
             (x, y - 1)
         where
           f loc = board' ^? xyToTile . ix loc
-      renderSpot :: HasGameState r => (Int, Int) -> LiveView r Message
+      renderSpot :: HasAppContext r => (Int, Int) -> LiveView r Message
       renderSpot loc@(x, y) =
         let [y0, x0, y1, x1] = tshow <$> [yEnd - y + 1, x - xStart + 1, yEnd - y + 2, x - xStart + 2]
          in div_
@@ -227,18 +227,20 @@ renderBoard' = do
               $ div_ [class_ "tile"] $ case _xyToTile board' ^. at (x, y) of
                 Nothing -> when isPhasePlaceTile $ do
                   turn <- view gameWhoseTurn
+                  me <- asks myPlayerIndex
                   mayPlaceCurrTile <- do
-                  -- TODO: check that it's the current viewer's turn as well.
-                    case turn ^. whoseTurnPhase of
-                      PhaseTile ->
-                        case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
-                          Just (currTile, True) ->
-                            Just
-                              <$> addActionBinding
-                                "click"
-                                (\_ -> PlaceTile loc)
-                          _ -> pure Nothing
-                      _ -> pure Nothing
+                    let (WhoseTurn player phase) = turn
+                    if player /= me then pure Nothing else
+                      case phase of
+                        PhaseTile ->
+                          case mayCurrTile <&> (\t -> (t, canPlace t (neighborhood loc))) of
+                            Just (currTile, True) ->
+                              Just
+                                <$> addActionBinding
+                                  "click"
+                                  (\_ -> PlaceTile loc)
+                            _ -> pure Nothing
+                        _ -> pure Nothing
 
                   let canPlaceTileClass = maybe "cant-place" (const "can-place") mayPlaceCurrTile
                   div_
@@ -274,11 +276,12 @@ renderTileContents tile = do
             PlaceSide U -> "1 / 2"
             PlaceSide D -> "3 / 2"
           color = ["red", "blue", "yellow", "green", "purple", "black"] !! fromIntegral i
+          isAbbot = case mplace of PlaceAbbot -> True; _ -> False
       div_ [class_ "meeple-container svg-container"] $ div_ [style_ [txt|
                           grid-area: $gridArea;
                           text-align: center;
                           fill: $color;
-                          |]] meepleSvg
+                          |]] (if isAbbot then abbotSvg else meepleSvg)
 
 meepleSvg :: Monad m => HtmlT m ()
 meepleSvg = toHtmlRaw [txt|<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
