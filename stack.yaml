@@ -43,6 +43,9 @@ packages:
 # extra-deps:
 # - data-tree-print-0.1.0.2@sha256:a451b35254521324f691f4a63012cac7f279e2761ce3e6d22d189476d8b6cde4,1620
 extra-deps:
+# - halive-0.1.8@sha256:0c9967c8a4d82162ffa852c1ea81404625a20f9b1684445c221534b9f69de85e,4674
+- git: https://github.com/lukexi/halive.git
+  commit: cae5b327730bcea5ef25bb05e5a12a283eade97d
 - monoidal-containers-0.6.0.1@sha256:ffdfae0fde7a08e9e314667a78d86454d2d23137d85f226ec6e757c190fb28ad,2583
 - random-1.2.0
 - servant-auth-0.4.0.0@sha256:01d02dfb7df4747fc96442517146d7d4ab0e575e597a124e238e8763036ea4ff,2125

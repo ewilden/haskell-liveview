@@ -1,3 +1,43 @@
+{-# LANGUAGE EmptyCase #-}
+{-# LANGUAGE PostfixOperators #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE HexFloatLiterals #-}
+{-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE GADTSyntax #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE StandaloneKindSignatures #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE NamedWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ConstrainedClassMethods #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE EmptyDataDeriving #-}
+{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections #-}
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -24,6 +64,7 @@ import Data.String (fromString)
 import Data.Text qualified as T
 import Debug.Trace
 import Focus qualified
+import Halive.Utils
 import Import
 import Lib
 import ListT qualified
@@ -66,7 +107,7 @@ liveView = do
     |]
   div_ $ do
     (UserId uid) <- view userId
-    fromString $ "Logged in as " <> T.unpack uid
+    fromString $ "Logged in currently as " <> T.unpack uid
   dimapLiveView id (\msg -> gameState %~ reducer msg) renderBoard'
   WhoseTurn player phase <- view gameWhoseTurn
   me <- asks myPlayerIndex
@@ -231,7 +272,7 @@ server' cookieSettings jwtSettings servCtxt =
     :<|> pure (doctypehtml_ $
                 form_ [action_ "/login", method_ "POST"] $ do
                   div_ $ do
-                    input_ [name_ "name", placeholder_ "Pick a name"]
+                    input_ [name_ "name", placeholder_ "Pick a name NOW!"]
                   div_ $ button_ "Login"
                       )
     :<|> do 
@@ -252,21 +293,24 @@ server' cookieSettings jwtSettings servCtxt =
                 )
     :<|> serveDirectoryWebApp "static"
 
-main :: IO ()
-main = do
-  servCtxt <- initServerContext
-  jwk <- generateKey
-  let jwtCfg = defaultJWTSettings jwk
-      cooks = defaultCookieSettings {
-        cookieIsSecure = NotSecure,
-        cookieSameSite = SameSiteStrict,
-        cookieXsrfSetting = Nothing
-        -- cookieXsrfSetting = Just defaultXsrfCookieSettings {
-        --   xsrfExcludeGet = True
-        -- }
-      }
-      cfg = cooks :. jwtCfg :. EmptyContext
-  Warp.run 5000 (serveWithContext api cfg (server' cooks jwtCfg servCtxt))
+main' :: IO ()
+main' = do
+  -- servCtxt <- initServerContext
+  -- jwk <- generateKey
+  -- let jwtCfg = defaultJWTSettings jwk
+  --     cooks = defaultCookieSettings {
+  --       cookieIsSecure = NotSecure,
+  --       cookieSameSite = SameSiteStrict,
+  --       cookieXsrfSetting = Nothing
+  --       -- cookieXsrfSetting = Just defaultXsrfCookieSettings {
+  --       --   xsrfExcludeGet = True
+  --       -- }
+  --     }
+  --     cfg = cooks :. jwtCfg :. EmptyContext
+  -- Warp.run 5000 (serveWithContext api cfg (server' cooks jwtCfg servCtxt))
+  persistedState <- reacquire "persisted-state" mkPersistedState
+  runServer persistedState
+
 
 mkPersistedState :: IO
   (Servant.Context '[CookieSettings, JWTSettings], CookieSettings,

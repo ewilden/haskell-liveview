@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 46f2e12d3f6196f07bcebf2a4fab6bccc5756b37263a7a37420ac9d05827100f
+-- hash: fb463706755fe77bf14f58ce2067431923379a53db78062b047cdf7ed080f2ef
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -97,6 +97,7 @@ library
     , cookie
     , extra >=1.6.17 && <2
     , focus
+    , halive
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
     , hspec
@@ -183,7 +184,7 @@ executable liveview-simple-exe
       LambdaCase
       NamedFieldPuns
       TupleSections
-  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -fwarn-incomplete-patterns -Werror -threaded -rtsopts -with-rtsopts=-N -dynamic
   build-depends:
       Diff >=0.3.4 && <1
     , MonadRandom
@@ -197,6 +198,7 @@ executable liveview-simple-exe
     , cookie
     , extra >=1.6.17 && <2
     , focus
+    , halive
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
     , hspec
@@ -299,6 +301,7 @@ test-suite liveview-simple-test
     , cookie
     , extra >=1.6.17 && <2
     , focus
+    , halive
     , hashable >=1.3.0.0 && <2
     , hedgehog >=1.0.4 && <2
     , hspec

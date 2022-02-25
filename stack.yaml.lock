@@ -5,6 +5,17 @@
 
 packages:
 - completed:
+    name: halive
+    version: 0.1.8
+    git: https://github.com/lukexi/halive.git
+    pantry-tree:
+      size: 2050
+      sha256: c9248ebc375b82566f62b95d33ce27078745e39bb0992e963b44f4c37991a348
+    commit: cae5b327730bcea5ef25bb05e5a12a283eade97d
+  original:
+    git: https://github.com/lukexi/halive.git
+    commit: cae5b327730bcea5ef25bb05e5a12a283eade97d
+- completed:
     hackage: monoidal-containers-0.6.0.1@sha256:ffdfae0fde7a08e9e314667a78d86454d2d23137d85f226ec6e757c190fb28ad,2583
     pantry-tree:
       size: 569
