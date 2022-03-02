@@ -52,7 +52,7 @@ dependencies:
 - random
 - reducers
 - semigroupoids
-- servant
+- servant >= 0.19
 - servant-auth
 - servant-auth-server
 - servant-lucid

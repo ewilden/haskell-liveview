@@ -43,6 +43,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 
+
+   
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds         #-}
+{-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE TypeOperators     #-}
+
 module LiveView.Examples.Carcassonne where
 
 import Control.Concurrent.Async qualified as Async
@@ -79,6 +89,10 @@ import Lucid
 import Lucid.Base (commuteHtmlT)
 import Network.Wai.Handler.Warp qualified as Warp
 import Servant hiding (Stream)
+import Servant.API (NamedRoutes)
+import Servant.API.Generic ((:-))
+import           Servant.Server.Generic ()
+import           Servant.API.Generic
 import Servant.Auth.Server
 import Servant.HTML.Lucid
 import StmContainers.Map qualified as StmMap
@@ -180,6 +194,42 @@ type API auths
   :<|> "lobby" :> Get '[HTML] (Html ())
   :<|> Raw
 
+data RootApi mode = RootApi
+ { simpleRoute :: mode :- "simple" :> Get '[JSON] (String)
+  -- { sessionRoute :: mode :- "session" :> Auth '[Cookie] User :> Capture "sessionid" T.Text :> LiveViewApi
+  -- , rootRoute :: mode :- Auth '[Cookie] User :> LiveViewApi
+  -- , joinRoute :: mode :- "join" :> Auth '[Cookie] User :> ReqBody '[FormUrlEncoded] SessionId :> Post303 '[JSON] '[] NoContent
+  -- , loginRoute :: mode :- "login" :> ReqBody '[FormUrlEncoded] User :> Post303 '[JSON]
+  --         '[ Header "Set-Cookie" SetCookie, Header "Set-Cookie" SetCookie]
+  --           NoContent
+  } deriving Generic
+
+type NamedApi = Get '[JSON] String 
+                  :<|> NamedRoutes RootApi
+
+namedServer :: Server NamedApi
+namedServer = undefined :<|> (RootApi {})
+
+-- type API2 = NamedRoutes NamedAPI
+
+-- api2 :: Proxy API2
+-- api2 = Proxy
+
+-- server2 :: CookieSettings -> JWTSettings -> ServerContext -> NamedAPI mode
+-- server2 cookieSettings jwtSettings servCtxt =
+--   NamedAPI
+--   { sessionRoute = \x -> undefined
+--   , rootRoute = undefined
+--   , joinRoute = undefined 
+--   , loginRoute = undefined
+--   }
+
+namedApi :: Proxy NamedApi
+namedApi = Proxy
+
+namedApp :: Application
+namedApp = serve namedApi namedServer
+
 -- See https://github.com/haskell-servant/servant-auth/issues/146#issuecomment-660490703
 
 joinSession :: ServerContext -> AuthResult User -> SessionId -> Handler (Headers '[ Header "Location" T.Text] NoContent)
@@ -235,7 +285,7 @@ takeUsername cookieSettings jwtSettings srvCtxt user = do
 -- Bug: placing multiple meeples can't be done on 1 city 3 roads (TODO)
 -- TODO: meeple ui. Done (at a basic level)
 
--- TODO: being able to resume the same game state after reloading ghci
+-- TODO: being able to resume the same game state after reloading ghci. Done w/ halive as well
 
 api :: Proxy (API '[Cookie])
 api = Proxy

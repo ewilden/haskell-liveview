@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: fb463706755fe77bf14f58ce2067431923379a53db78062b047cdf7ed080f2ef
+-- hash: a6feb33f1ec1d6ec3a8e7c41cf6d83a56db768cc62b95ead41750629efb76179
 
 name:           liveview-simple
 version:        0.1.0.0
@@ -115,7 +115,7 @@ library
     , random
     , reducers
     , semigroupoids
-    , servant
+    , servant >=0.19
     , servant-auth
     , servant-auth-server
     , servant-lucid
@@ -217,7 +217,7 @@ executable liveview-simple-exe
     , random
     , reducers
     , semigroupoids
-    , servant
+    , servant >=0.19
     , servant-auth
     , servant-auth-server
     , servant-lucid
@@ -320,7 +320,7 @@ test-suite liveview-simple-test
     , random
     , reducers
     , semigroupoids
-    , servant
+    , servant >=0.19
     , servant-auth
     , servant-auth-server
     , servant-lucid
